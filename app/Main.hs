@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Main where
 
 import Lib
@@ -10,7 +8,7 @@ import qualified Control.Foldl as Fold
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Maybe
-import Data.Text as T hiding (find)
+import Data.Text as T hiding (find, stripPrefix)
 import Prelude as P hiding (FilePath)
 import Turtle
 
@@ -25,9 +23,10 @@ runProgram options = do
   either print pure =<< runExceptT (runReaderT (runApp zcuiM) options)
 
 verifyOptions :: Options -> IO (Either Text Options)
-verifyOptions (Options musicDir archiveOpt) = do
+verifyOptions Options {..} = do
+  music_ <- sh . normalizePath . unMusicDir $ musicDir
   music <- testMusicDir musicDir
-  archive <- testArchive archiveOpt
+  archive <- testArchive archiveOptions
   pure $ liftM2 Options music archive
 
 testMusicDir :: MusicDir -> IO (Either Text MusicDir)
@@ -46,3 +45,16 @@ testdir' path = do
   if pathExists
     then pure . Right $ path
     else pure . Left . T.append "Could not find path: " . T.pack . show $ path
+
+normalizePath :: FilePath -> Shell (Either Text FilePath)
+normalizePath path
+  | relative path =
+    (maybe (Left "Failed to absolutize path") Right) <$> absolutize path
+  | otherwise = pure . pure $ path
+
+absolutize :: FilePath -> Shell (Maybe FilePath)
+absolutize path = (\h -> liftM2 (</>) h stripTilde) <$> home
+  where
+    stripTilde = stripPrefix "~/" path
+    home :: Shell (Maybe FilePath)
+    home = fmap fromText <$> need "HOME"

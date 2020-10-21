@@ -1,4 +1,4 @@
-module Archive where
+module Archive (archivesM) where 
 
 import Types
 
@@ -17,8 +17,6 @@ import Filesystem.Path.CurrentOS
 import Prelude as P hiding (FilePath)
 import Turtle
 
-trace_ x = trace (show x) x
-
 data RelativeAlbum = RelativeAlbum
   { _album :: Album
   , relativePath :: FilePath
@@ -26,15 +24,35 @@ data RelativeAlbum = RelativeAlbum
 
 archivesM :: [Album] -> App [Album]
 archivesM albums = do
-  (MusicDir musicDir_) <- asks musicDir
-  let relAlbums =
-        P.mapM
-          (\a ->
-             RelativeAlbum a <$> stripPrefix (musicDir_ </> mempty) (baseDir a))
-          albums
-  flip (maybe (throwError "Could not construct destination path")) relAlbums $ \relAlbums_ -> do
-    result <- sh =<< flip archive relAlbums_ <$> asks archiveOptions
-    pure albums
+  relAlbums <- pathRelativeAlbums albums
+  opts <- asks archiveOptions
+  report . archiveStatus $ opts
+  _ <- sh $ archive opts relAlbums
+  pure albums
+
+archiveStatus :: ArchiveOptions -> Text
+archiveStatus NoArchive = "Skipping archiving"
+archiveStatus (MoveArchive (ArchiveDir path)) =
+  T.unwords
+    [ "Moving albums to"
+    , fromRight "could not parse archive path" . toText $ path
+    ]
+archiveStatus (ZipArchive (ArchiveDir path)) =
+  T.unwords
+    [ "Zipping albums to"
+    , fromRight "could not parse archive path" . toText $ path
+    ]
+
+
+pathRelativeAlbums :: [Album] -> App [RelativeAlbum]
+pathRelativeAlbums albums = do
+  musicDir <- unMusicDir <$> asks musicDir
+  maybeToErr "Could not construct destination path" $
+    P.mapM (mkRelativeAlbum musicDir) albums
+
+mkRelativeAlbum :: FilePath -> Album -> Maybe RelativeAlbum
+mkRelativeAlbum musicDir album =
+  RelativeAlbum album <$> stripPrefix (musicDir </> mempty) (baseDir album)
 
 archive :: ArchiveOptions -> [RelativeAlbum] -> Shell (Either Text [Album])
 archive opt albums =
@@ -77,7 +95,10 @@ rsync source dest =
       case result of
         ExitSuccess -> return $ Right ()
         ExitFailure _ -> return $ syncFailureMsg source dest
-
-syncFailureMsg source dest =
-  Left . T.concat $
-  [T.pack "Failed to sync album from ", _toText source, " to ", _toText dest]
+    syncFailureMsg source dest =
+      Left . T.concat $
+      [ T.pack "Failed to sync album from "
+      , _toText source
+      , " to "
+      , _toText dest
+      ]

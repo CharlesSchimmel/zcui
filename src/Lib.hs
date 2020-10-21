@@ -19,9 +19,6 @@ import Filesystem.Path.CurrentOS
 import Prelude as P hiding (FilePath)
 import Turtle
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
-
 findFlacs :: FilePath -> Shell FilePath
 findFlacs = find (suffix ".flac")
 
@@ -43,14 +40,8 @@ albumMapFold = Fold foldy HM.empty id
     foldy accumulatedMap flacPath =
       insertWith (++) (directory flacPath) [Song flacPath] accumulatedMap
 
-findAlbums :: MusicDir -> Shell [Album]
-findAlbums (MusicDir musFolder) = do
-  albumMap <- reduce albumMapFold $ findFlacs musFolder
-  let albums = P.map mkAlbum $ toList albumMap
-  return albums
-
-findAlbumsM :: App [Album]
-findAlbumsM = do
+doFindAlbums :: App [Album]
+doFindAlbums = do
   flacs <- findFlacs <$> asks (unMusicDir . musicDir)
   albumMap <- reduce albumMapFold flacs
   let albums = P.map mkAlbum $ toList albumMap
@@ -58,43 +49,17 @@ findAlbumsM = do
     then throwError "No albums found."
     else pure albums
 
-convertDeleteAlbum :: Album -> App Album
-convertDeleteAlbum album = do
-  report "Converting..."
-  converted <- convertM $ songs album
-  report "Deleting..."
-  report $ T.unwords $ P.map (T.pack . show . songPath . originalSong) converted
-  deleted <- deleteSongsM (P.map originalSong converted)
-  pure album
-
-archiveStatus :: ArchiveOptions -> Text
-archiveStatus NoArchive = "Skipping archiving"
-archiveStatus (MoveArchive (ArchiveDir path)) =
-  T.unwords
-    [ "Moving albums to"
-    , fromRight "could not parse archive path" . toText $ path
-    ]
-archiveStatus (ZipArchive (ArchiveDir path)) =
-  T.unwords
-    [ "Zipping albums to"
-    , fromRight "could not parse archive path" . toText $ path
-    ]
+findAlbumsM :: App [Album]
+findAlbumsM = do
+  albums <- doFindAlbums
+  report . T.unlines $ "Found albums:" : P.map artistAlbum albums
+  return albums
 
 zcuiM :: App ()
 zcuiM = do
-  musicDir_ <- asks musicDir
   albums <- findAlbumsM
-  report . T.unwords $ "Found albums:" : P.map artistAlbum albums
-  archOpt <- asks archiveOptions
-  report . archiveStatus $ archOpt
   archived <- archivesM albums
-  report "Converting..."
-  convertedAndDeleted <- mapM convertDeleteAlbum archived
-  report "Updating..."
-  sh beetUpdate
-  report "Importing..."
-  imported <- importM convertedAndDeleted
+  converted <- convertM (archived >>= songs)
+  _ <- updateM
+  imported <- importM archived
   report "All done :)"
-
-report :: Text -> App ()
-report = liftIO . print

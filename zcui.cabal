@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b6d8e591ae374c10a8361eff8f0a8dd83efd413e6dafb7726434c846ff68f2c5
+-- hash: 2a8c8048210aec5a46e2c155681e01d3887bc263559260fa2523ad344f29c229
 
 name:           zcui
 version:        0.1.0.0
@@ -31,12 +31,13 @@ library
       Convert
       Import
       Lib
+      Puns
       Types
   other-modules:
       Paths_zcui
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns
   build-depends:
       base >=4.7 && <5
     , foldl
@@ -49,14 +50,14 @@ library
     , unordered-containers
   default-language: Haskell2010
 
-executable zcui-exe
+executable zcui
   main-is: Main.hs
   other-modules:
       Options
       Paths_zcui
   hs-source-dirs:
       app
-  default-extensions: OverloadedStrings
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -78,7 +79,7 @@ test-suite zcui-test
       Paths_zcui
   hs-source-dirs:
       test
-  default-extensions: OverloadedStrings
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

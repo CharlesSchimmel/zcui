@@ -4,12 +4,12 @@
 
 module Types where
 
-import Control.Monad.Except
-import Control.Monad.Reader
-import Data.Either
-import Data.Hashable
+import Control.Monad.Except (ExceptT, throwError, MonadError)
+import Control.Monad.Reader (ReaderT, MonadReader)
+import Data.Either (fromRight)
+import Data.Hashable (Hashable, hashWithSalt)
 import Data.Text as T
-import Filesystem.Path.CurrentOS
+import Filesystem.Path.CurrentOS (FilePath)
 import GHC.Generics (Generic)
 import Prelude hiding (FilePath)
 import Turtle
@@ -72,10 +72,13 @@ data ConvertedSong = ConvertedSong
   , convertedSong :: Song
   } deriving (Show)
 
-swap :: Either a (Shell b) -> Shell (Either a b)
-swap = either (pure . Left) (fmap Right)
-
 devNull :: Shell Line -> Shell ()
 devNull = output "/dev/null"
 
 _toText = fromRight "" . toText
+
+report :: Text -> App ()
+report = liftIO . putStrLn . T.unpack
+
+maybeToErr :: Text -> Maybe a -> App a
+maybeToErr msg = maybe (throwError msg) pure
