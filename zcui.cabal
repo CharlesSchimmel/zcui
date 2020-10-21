@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2a8c8048210aec5a46e2c155681e01d3887bc263559260fa2523ad344f29c229
+-- hash: 62d317eb256b419c020016136970c6ec53d76b005a96f244fb035b32e25b1e47
 
 name:           zcui
 version:        0.1.0.0
@@ -31,7 +31,6 @@ library
       Convert
       Import
       Lib
-      Puns
       Types
   other-modules:
       Paths_zcui
