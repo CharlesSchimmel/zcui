@@ -2,17 +2,27 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Types where
+module Types (App(..), Options(..), Album(..), artistAlbum, artistAlbumPath, Song(..), MusicDir(..), ArchiveOptions(..), ConvertedSong(..), report, maybeToErr, ArchiveDir(..), _toText)
+  where
 
 import Control.Monad.Except (ExceptT, throwError, MonadError)
 import Control.Monad.Reader (ReaderT, MonadReader)
 import Data.Either (fromRight)
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.Text as T
-import Filesystem.Path.CurrentOS (FilePath)
-import GHC.Generics (Generic)
 import Prelude hiding (FilePath)
 import Turtle
+
+newtype App a = App
+  { runApp :: ReaderT Options (ExceptT Text IO) a
+  } deriving (Monad, Functor, Applicative, AppConfig, MonadIO, MonadError Text)
+
+type AppConfig = MonadReader Options
+
+data Options = Options
+  { musicDir :: MusicDir
+  , archiveOptions :: ArchiveOptions
+  } deriving (Show)
 
 data Album = Album
   { baseDir :: FilePath
@@ -40,14 +50,7 @@ newtype MusicDir = MusicDir
   { unMusicDir :: FilePath
   } deriving (Show)
 
-mkMusicDir :: String -> MusicDir
-mkMusicDir = MusicDir . fromText . T.pack
-
-mkArchiveDir :: String -> ArchiveDir
-mkArchiveDir = ArchiveDir . fromText . T.pack
-
-newtype ArchiveDir =
-  ArchiveDir FilePath
+newtype ArchiveDir = ArchiveDir { unArchiveDir :: FilePath }
   deriving (Show)
 
 data ArchiveOptions
@@ -56,24 +59,10 @@ data ArchiveOptions
   | NoArchive
   deriving (Show)
 
-data Options = Options
-  { musicDir :: MusicDir
-  , archiveOptions :: ArchiveOptions
-  } deriving (Show)
-
-type AppConfig = MonadReader Options
-
-newtype App a = App
-  { runApp :: ReaderT Options (ExceptT Text IO) a
-  } deriving (Monad, Functor, Applicative, AppConfig, MonadIO, MonadError Text)
-
 data ConvertedSong = ConvertedSong
   { originalSong :: Song
   , convertedSong :: Song
   } deriving (Show)
-
-devNull :: Shell Line -> Shell ()
-devNull = output "/dev/null"
 
 _toText = fromRight "" . toText
 

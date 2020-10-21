@@ -7,15 +7,9 @@ import Types
 
 import Control.Monad.Except
 import Control.Monad.Reader
-import Data.Either
 import Data.HashMap as HM
-import Data.Hashable
-import Data.Maybe
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8)
-import Debug.Trace
 import Filesystem.Path
-import Filesystem.Path.CurrentOS
 import Prelude as P hiding (FilePath)
 import Turtle
 
@@ -59,7 +53,7 @@ zcuiM :: App ()
 zcuiM = do
   albums <- findAlbumsM
   archived <- archivesM albums
-  converted <- convertM (archived >>= songs)
+  _ <- convertM (archived >>= songs)
   _ <- updateM
-  imported <- importM archived
+  _ <- importM archived
   report "All done :)"

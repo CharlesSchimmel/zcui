@@ -5,16 +5,9 @@ import Types
 import qualified Control.Foldl as Fold
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.Reader
 import Data.Either
 import Data.Functor
-import Data.HashMap as HM
-import Data.Hashable
-import Data.Maybe
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8)
-import Debug.Trace
-import Filesystem.Path
 import Filesystem.Path.CurrentOS
 import Prelude as P hiding (FilePath)
 import Turtle
