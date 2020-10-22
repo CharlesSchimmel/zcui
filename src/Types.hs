@@ -2,16 +2,37 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Types (App(..), Options(..), Album(..), artistAlbum, artistAlbumPath, Song(..), MusicDir(..), ArchiveOptions(..), ConvertedSong(..), report, maybeToErr, ArchiveDir(..), _toText)
-  where
+module Types
+  ( App(..)
+  , Options(..)
+  , Album(..)
+  , artistAlbum
+  , artistAlbumPath
+  , Song(..)
+  , MusicDir(..)
+  , ArchiveOptions(..)
+  , ConvertedSong(..)
+  , report
+  , maybeToErr
+  , ArchiveDir(..)
+  , _toText
+  )
+where
 
-import Control.Monad.Except (ExceptT, throwError, MonadError)
-import Control.Monad.Reader (ReaderT, MonadReader)
-import Data.Either (fromRight)
-import Data.Hashable (Hashable, hashWithSalt)
-import Data.Text as T
-import Prelude hiding (FilePath)
-import Turtle
+import           Control.Monad.Except           ( ExceptT
+                                                , throwError
+                                                , MonadError
+                                                )
+import           Control.Monad.Reader           ( ReaderT
+                                                , MonadReader
+                                                )
+import           Data.Either                    ( fromRight )
+import           Data.Hashable                  ( Hashable
+                                                , hashWithSalt
+                                                )
+import           Data.Text                     as T
+import           Prelude                 hiding ( FilePath )
+import           Turtle
 
 newtype App a = App
   { runApp :: ReaderT Options (ExceptT Text IO) a
@@ -39,8 +60,7 @@ artistAlbum album = T.unwords [artistName album, "-", albumName album]
 
 instance Hashable FilePath where
   hashWithSalt salt filePath = hashWithSalt salt pathTxt
-    where
-      pathTxt = fromRight "" . toText $ filePath
+    where pathTxt = fromRight "" . toText $ filePath
 
 newtype Song = Song
   { songPath :: FilePath
