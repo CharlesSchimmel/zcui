@@ -15,7 +15,7 @@ import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
-import           Turtle
+import           Turtle                  hiding ( (<&>) )
 
 convertM :: [Song] -> App [ConvertedSong]
 convertM songs = do
@@ -24,7 +24,7 @@ convertM songs = do
 
 goConvert :: Song -> App ConvertedSong
 goConvert song@(Song songPath) = do
-  liftIO . putStrLn . T.unpack . T.unwords $ ["Converting", fileName]
+  liftIO . putStrLn . T.unpack $ fileName
   result <- single . doConvert $ song
   either throwError pure result
  where
@@ -32,14 +32,14 @@ goConvert song@(Song songPath) = do
     fromRight "(oops, could not toText song path)" (toText $ filename songPath)
 
 doConvert :: Song -> Shell (Either Text ConvertedSong)
-doConvert song@Song {..} = either (pure . Left) id
-  $ liftM2 convert' textSongPath textOggPath
+doConvert song@Song {..} =
+  either (pure . Left) id $ convert' <$> textSongPath <*> textOggPath
  where
   oggPath       = replaceExtension songPath "ogg"
   textSongPath  = toText songPath
   textOggPath   = toText oggPath
   convertedSong = ConvertedSong song (Song oggPath)
-  convert' orig ogg = (convertedSong <$) <$> convertToOgg orig ogg
+  convert' orig ogg = convertToOgg orig ogg <&> ($> convertedSong)
 
 convertToOgg :: Text -> Text -> Shell (Either Text ())
 convertToOgg origPath oggPath = do
@@ -68,13 +68,14 @@ convertToOgg origPath oggPath = do
     ExitFailure _ -> pure . Left $ "Failed converting"
 
 deleteSongsM :: [Song] -> App ()
-deleteSongsM songs = mapM deleteSong songs $> ()
+deleteSongsM songs = do
+  report "Deleting"
+  void $ mapM deleteSong songs
 
 deleteSong :: Song -> App ()
 deleteSong (Song songPath) = do
-  report message
+  liftIO . putStrLn . T.unpack $ fileNameText
   sh $ rm songPath
  where
-  message = T.unwords ["Deleting", fileNameText]
   fileNameText =
     fromRight "(oops, could not toText song path)" (toText $ filename songPath)

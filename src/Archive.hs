@@ -5,16 +5,12 @@ where
 
 import           Types
 
+import           Control.Monad.Error
 import           Control.Monad
-import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Data.Either
-import           Data.HashMap                  as HM
-import           Data.Hashable
 import           Data.Maybe
 import qualified Data.Text                     as T
-import           Data.Text.Encoding             ( decodeUtf8 )
-import           Debug.Trace
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
@@ -22,9 +18,10 @@ import           Prelude                       as P
 import           Turtle
 
 data RelativeAlbum = RelativeAlbum
-  { _album :: Album
+  { _album       :: Album
   , relativePath :: FilePath
-  } deriving (Show)
+  }
+  deriving Show
 
 archivesM :: [Album] -> App [Album]
 archivesM albums = do
@@ -42,7 +39,6 @@ archiveStatus (ZipArchive (ArchiveDir path)) = T.unwords
   [ "Zipping albums to"
   , fromRight "could not parse archive path" . toText $ path
   ]
-
 
 pathRelativeAlbums :: [Album] -> App [RelativeAlbum]
 pathRelativeAlbums albums = do

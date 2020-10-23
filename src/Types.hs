@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 
 module Types
@@ -25,6 +26,7 @@ import           Control.Monad.Except           ( ExceptT
                                                 )
 import           Control.Monad.Reader           ( ReaderT
                                                 , MonadReader
+                                                , asks
                                                 )
 import           Data.Either                    ( fromRight )
 import           Data.Hashable                  ( Hashable
@@ -38,19 +40,30 @@ newtype App a = App
   { runApp :: ReaderT Options (ExceptT Text IO) a
   } deriving (Monad, Functor, Applicative, AppConfig, MonadIO, MonadError Text)
 
+class Monad m => Logs m where
+  report :: Text -> m ()
+
+instance Logs App where
+  report = liftIO . putStrLn . T.unpack
+
+instance Logs IO where
+  report = putStrLn . T.unpack
+
 type AppConfig = MonadReader Options
 
 data Options = Options
-  { musicDir :: MusicDir
+  { musicDir       :: MusicDir
   , archiveOptions :: ArchiveOptions
-  } deriving (Show)
+  }
+  deriving Show
 
 data Album = Album
-  { baseDir :: FilePath
-  , albumName :: Text
+  { baseDir    :: FilePath
+  , albumName  :: Text
   , artistName :: Text
-  , songs :: [Song]
-  } deriving (Show)
+  , songs      :: [Song]
+  }
+  deriving Show
 
 artistAlbumPath :: Album -> FilePath
 artistAlbumPath (Album _ album artist _) = fromText artist </> fromText album
@@ -80,14 +93,15 @@ data ArchiveOptions
   deriving (Show)
 
 data ConvertedSong = ConvertedSong
-  { originalSong :: Song
+  { originalSong  :: Song
   , convertedSong :: Song
-  } deriving (Show)
+  }
+  deriving Show
 
 _toText = fromRight "" . toText
 
-report :: Text -> App ()
-report = liftIO . putStrLn . T.unpack
+-- report :: Text -> App ()
+-- report = liftIO . putStrLn . T.unpack
 
-maybeToErr :: Text -> Maybe a -> App a
+maybeToErr :: MonadError Text m => Text -> Maybe a -> m a
 maybeToErr msg = maybe (throwError msg) pure
