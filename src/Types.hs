@@ -1,24 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Types
-  ( App(..)
-  , Options(..)
-  , Album(..)
-  , artistAlbum
-  , artistAlbumPath
-  , Song(..)
-  , MusicDir(..)
-  , ArchiveOptions(..)
-  , ConvertedSong(..)
-  , report
-  , maybeToErr
-  , ArchiveDir(..)
-  , _toText
-  )
-where
+module Types where
 
 import           Control.Monad.Except           ( ExceptT
                                                 , throwError
@@ -37,25 +21,48 @@ import           Prelude                 hiding ( FilePath )
 import           Turtle
 
 newtype App a = App
-  { runApp :: ReaderT Options (ExceptT Text IO) a
-  } deriving (Monad, Functor, Applicative, AppConfig, MonadIO, MonadError Text)
+  { runApp :: ReaderT Env (ExceptT Text IO) a
+  } deriving (Monad, Functor, Applicative, MonadReader Env, MonadIO, MonadError Text)
+
+data Env = Env
+  { config  :: Config
+  , logFunc :: Text -> IO ()
+  }
+
+class HasConfig a where
+  getConfig :: a -> Config
+
+instance HasConfig Env where
+  getConfig = config
+
+instance HasConfig Config where
+  getConfig = id
+
+class CanLog e where
+  getLogger :: e -> Text -> IO ()
+
+report_ :: (MonadIO m, MonadReader env m, CanLog env) => Text -> m ()
+report_ text = do
+  logr <- asks getLogger
+  liftIO $ logr text
+
+instance CanLog Env where
+  getLogger = logFunc
 
 class Monad m => Logs m where
   report :: Text -> m ()
 
 instance Logs App where
-  report = liftIO . putStrLn . T.unpack
+  report text = do
+    log <- asks logFunc
+    liftIO $ log text
 
-instance Logs IO where
-  report = putStrLn . T.unpack
+type Archiver m = RelativeAlbum -> m (Either T.Text Album)
 
-type AppConfig = MonadReader Options
-
-data Options = Options
+data Config = Config
   { musicDir       :: MusicDir
   , archiveOptions :: ArchiveOptions
   }
-  deriving Show
 
 data Album = Album
   { baseDir    :: FilePath
@@ -64,9 +71,6 @@ data Album = Album
   , songs      :: [Song]
   }
   deriving Show
-
-artistAlbumPath :: Album -> FilePath
-artistAlbumPath (Album _ album artist _) = fromText artist </> fromText album
 
 artistAlbum :: Album -> Text
 artistAlbum album = T.unwords [artistName album, "-", albumName album]
@@ -98,10 +102,19 @@ data ConvertedSong = ConvertedSong
   }
   deriving Show
 
-_toText = fromRight "" . toText
+data ConversionOptions = ConversionOptions
+  { bitrate :: Int
+  }
+  deriving Show
 
--- report :: Text -> App ()
--- report = liftIO . putStrLn . T.unpack
+_toText = fromRight "" . toText
 
 maybeToErr :: MonadError Text m => Text -> Maybe a -> m a
 maybeToErr msg = maybe (throwError msg) pure
+
+data RelativeAlbum = RelativeAlbum
+  { _album       :: Album
+  , relativePath :: FilePath
+  }
+  deriving Show
+

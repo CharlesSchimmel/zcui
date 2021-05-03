@@ -6,6 +6,7 @@ where
 
 import           Types
 
+import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad
 import           Control.Monad.Except
 import           Data.Either
@@ -17,12 +18,15 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
-convertM :: [Song] -> App [ConvertedSong]
+convertM
+  :: (MonadReader env m, CanLog env, MonadIO m, MonadError Text m)
+  => [Song]
+  -> m [ConvertedSong]
 convertM songs = do
-  report "Converting..."
+  report_ "Converting..."
   mapM goConvert songs
 
-goConvert :: Song -> App ConvertedSong
+goConvert :: (MonadIO m, MonadError Text m) => Song -> m ConvertedSong
 goConvert song@(Song songPath) = do
   liftIO . putStrLn . T.unpack $ fileName
   result <- single . doConvert $ song
@@ -67,14 +71,14 @@ convertToOgg origPath oggPath = do
     ExitSuccess   -> pure . Right $ ()
     ExitFailure _ -> pure . Left $ "Failed converting"
 
-deleteSongsM :: [Song] -> App ()
+deleteSongsM :: (MonadReader env m, CanLog env, MonadIO m) => [Song] -> m ()
 deleteSongsM songs = do
-  report "Deleting"
+  report_ "Deleting"
   void $ mapM deleteSong songs
 
-deleteSong :: Song -> App ()
+deleteSong :: (MonadIO m, MonadReader env m, CanLog env) => Song -> m ()
 deleteSong (Song songPath) = do
-  liftIO . putStrLn . T.unpack $ fileNameText
+  report_ fileNameText
   sh $ rm songPath
  where
   fileNameText =

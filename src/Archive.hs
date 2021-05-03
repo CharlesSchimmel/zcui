@@ -1,15 +1,14 @@
-module Archive
-  ( archivesM
-  )
-where
+module Archive where
 
 import           Types
 
-import           Control.Monad.Error
+import           Control.Monad.Except
 import           Control.Monad
 import           Control.Monad.Reader
+import           Control.Foldl                  ( list )
 import           Data.Either
 import           Data.Maybe
+import           Data.Functor                   ( ($>) )
 import qualified Data.Text                     as T
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
@@ -17,19 +16,20 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-data RelativeAlbum = RelativeAlbum
-  { _album       :: Album
-  , relativePath :: FilePath
-  }
-  deriving Show
-
-archivesM :: [Album] -> App [Album]
+archivesM
+  :: ( MonadIO m
+     , MonadReader env m
+     , HasConfig env
+     , MonadError Text m
+     , CanLog env
+     )
+  => [Album]
+  -> m [Album]
 archivesM albums = do
+  archOpts <- asks (archiveOptions . getConfig)
+  report_ . archiveStatus $ archOpts
   relAlbums <- pathRelativeAlbums albums
-  opts      <- asks archiveOptions
-  report . archiveStatus $ opts
-  _ <- sh $ archive opts relAlbums
-  pure albums
+  archiveMany archOpts relAlbums
 
 archiveStatus :: ArchiveOptions -> Text
 archiveStatus NoArchive                       = "Skipping archiving"
@@ -40,33 +40,57 @@ archiveStatus (ZipArchive (ArchiveDir path)) = T.unwords
   , fromRight "could not parse archive path" . toText $ path
   ]
 
-pathRelativeAlbums :: [Album] -> App [RelativeAlbum]
+pathRelativeAlbums
+  :: (MonadError Text m, MonadReader env m, HasConfig env)
+  => [Album]
+  -> m [RelativeAlbum]
 pathRelativeAlbums albums = do
-  musicDir <- unMusicDir <$> asks musicDir
+  musicDir <- asks (musicDir . getConfig)
   maybeToErr "Could not construct destination path"
     $ P.mapM (mkRelativeAlbum musicDir) albums
 
-mkRelativeAlbum :: FilePath -> Album -> Maybe RelativeAlbum
-mkRelativeAlbum musicDir album =
+mkRelativeAlbum :: MusicDir -> Album -> Maybe RelativeAlbum
+mkRelativeAlbum (MusicDir musicDir) album =
   RelativeAlbum album <$> stripPrefix (musicDir </> mempty) (baseDir album)
 
-archive :: ArchiveOptions -> [RelativeAlbum] -> Shell (Either Text [Album])
-archive opt albums =
-  fmap (const . P.map _album $ albums) <$> doArchive opt albums
+archiveOne
+  :: (MonadIO m, MonadError Text m)
+  => ArchiveOptions
+  -> RelativeAlbum
+  -> m Album
+archiveOne archOpts album = do
+  result <- ((getArchiver archOpts) album)
+  either throwError pure result
 
-doArchive :: ArchiveOptions -> [RelativeAlbum] -> Shell (Either Text ())
-doArchive NoArchive = const . pure . pure $ ()
-doArchive (ZipArchive archiveDir) =
-  cat . P.map (archiveZip archiveDir . _album)
-doArchive (MoveArchive archiveDir) = cat . P.map (archiveMove archiveDir)
+archiveMany
+  :: (MonadIO m, MonadError Text m)
+  => ArchiveOptions
+  -> [RelativeAlbum]
+  -> m [Album]
+archiveMany archOpts albums = sequence $ P.map (archiveOne archOpts) albums
+
+getArchiver :: MonadIO io => ArchiveOptions -> Archiver io
+getArchiver opts albums = single $ doArchive opts albums
+
+doArchive :: ArchiveOptions -> RelativeAlbum -> Shell (Either Text Album)
+doArchive NoArchive                = const (select [])
+doArchive (ZipArchive  archiveDir) = archiveZip' archiveDir . _album
+doArchive (MoveArchive archiveDir) = archiveMove' archiveDir
+
+archiveZip' :: ArchiveDir -> Album -> Shell (Either Text Album)
+archiveZip' archDir album = archiveZip archDir album <&> ($> album)
+
+archiveMove' :: ArchiveDir -> RelativeAlbum -> Shell (Either Text Album)
+archiveMove' archDir album = archiveMove archDir album <&> ($> (_album album))
 
 archiveZip :: ArchiveDir -> Album -> Shell (Either Text ())
-archiveZip (ArchiveDir archiveDir) (Album albumPath album artist _) = zap
-  zipPath
-  albumPath
- where
-  zipName = T.concat [T.unwords [artist, "-", album], ".7z"]
-  zipPath = archiveDir </> fromText zipName
+archiveZip archive album@Album {..} = zap (buildZipPath archive album) baseDir
+
+buildZipPath :: ArchiveDir -> Album -> FilePath
+buildZipPath (ArchiveDir dir) album = dir </> fromText (buildZipName album)
+
+buildZipName :: Album -> Text
+buildZipName album = T.concat [artistAlbum album, ".7z"]
 
 zap :: FilePath -> FilePath -> Shell (Either Text ())
 zap zipFilePath folderToZip = either (pure . Left) id
@@ -100,3 +124,5 @@ rsync source dest = either (pure . Left) id
         , " to "
         , _toText dest
         ]
+
+

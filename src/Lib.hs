@@ -34,17 +34,26 @@ albumMapFold = Fold foldy HM.empty id
     foldy accumulatedMap flacPath =
         insertWith (++) (directory flacPath) [Song flacPath] accumulatedMap
 
-doFindAlbums :: App [Album]
+doFindAlbums
+    :: (MonadIO m, MonadError Text m, MonadReader env m, HasConfig env)
+    => m [Album]
 doFindAlbums = do
-    flacs    <- findFlacs <$> asks (unMusicDir . musicDir)
+    flacs    <- findFlacs <$> asks (unMusicDir . musicDir . getConfig)
     albumMap <- reduce albumMapFold flacs
     let albums = P.map mkAlbum $ toList albumMap
     if P.null albums then throwError "No albums found." else pure albums
 
-findAlbumsM :: App [Album]
+findAlbumsM
+    :: ( MonadIO m
+       , MonadError Text m
+       , MonadReader env m
+       , HasConfig env
+       , CanLog env
+       )
+    => m [Album]
 findAlbumsM = do
     albums <- doFindAlbums
-    report . T.unlines $ "Found albums:" : P.map artistAlbum albums
+    report_ . T.unlines $ "Found albums:" : P.map artistAlbum albums
     return albums
 
 zcuiM :: App ()

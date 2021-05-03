@@ -16,11 +16,16 @@ import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
+import           Control.Monad.Reader           ( MonadReader )
 
-importM :: [Album] -> App ()
-importM albums = report "Importing albums" <* case textPaths of
-  Left  l     -> throwError l
-  Right paths -> void . sh $ beetImport paths
+importM
+  :: (MonadIO m, MonadReader env m, MonadError Text m, CanLog env)
+  => [Album]
+  -> m ()
+importM albums = do
+  report_ "Importing albums"
+  either throwError (void . sh . beetImport) textPaths
+  report_ "Finished importing albums"
  where
   albumPaths = P.map baseDir albums
   textPaths  = mapM toText albumPaths
@@ -28,11 +33,11 @@ importM albums = report "Importing albums" <* case textPaths of
 beetImport :: [Text] -> Shell Line
 beetImport paths = inproc "beet" ("import" : paths) (pure mempty)
 
-updateM :: App ()
+updateM :: (MonadReader env m, CanLog env, MonadIO m) => m ()
 updateM = do
-  report "Updating beets"
+  report_ "Updating beets"
   result <- Turtle.fold beetUpdate Fold.list
-  mapM_ report result
+  mapM_ report_ result
 
 beetUpdate :: Shell Text
 beetUpdate = either whocares lineToText <$> doUpdate

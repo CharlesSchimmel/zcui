@@ -16,19 +16,26 @@ import           Turtle
 
 main :: IO ()
 main = do
-    opts   <- options "Greetings" optionsParse
-    optsOk <- verifyOptions opts
-    either print runProgram optsOk
+    args   <- doParseArgs
+    optsOk <- verifyOptions args
+    let env = mkEnv <$> optsOk
+    either print runProgram env
 
-runProgram :: Options -> IO ()
-runProgram options = do
-    either print pure =<< runExceptT (runReaderT (runApp zcuiM) options)
+runProgram :: Env -> IO ()
+runProgram env = do
+    either print pure =<< runExceptT (runReaderT (runApp zcuiM) env)
 
-verifyOptions :: Options -> IO (Either Text Options)
-verifyOptions Options {..} = do
-    music   <- testMusicDir musicDir
-    archive <- testArchive archiveOptions
-    pure $ Options <$> music <*> archive
+mkEnv :: Config -> Env
+mkEnv conf = Env conf oldLogger
+
+oldLogger :: MonadIO io => Text -> io ()
+oldLogger = liftIO . putStrLn . T.unpack
+
+verifyOptions :: Arguments -> IO (Either Text Config)
+verifyOptions Arguments {..} = do
+    music   <- testMusicDir argMusicDir
+    archive <- testArchive argArchiveOptions
+    pure $ Config <$> music <*> archive
 
 testMusicDir :: MusicDir -> IO (Either Text MusicDir)
 testMusicDir musicDir@(MusicDir path) = pure musicDir <$ testdir' path
@@ -85,5 +92,4 @@ testdir'' tester path = do
 -- homeRelative' :: FilePath -> FilePath -> Maybe FilePath
 -- homeRelative' homeDir targetDir = (homeDir </>) <$> withoutTilde
 --     where withoutTilde = stripPrefix "~/" targetDir
-
 
