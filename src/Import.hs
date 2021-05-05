@@ -18,26 +18,34 @@ import           Prelude                       as P
 import           Turtle
 import           Control.Monad.Reader           ( MonadReader )
 
-importM
-  :: (MonadIO m, MonadReader env m, MonadError Text m, CanLog env)
-  => [Album]
-  -> m ()
+class CanImport m where
+  importAlbums :: [Album] -> m ()
+
+instance CanImport App where
+  importAlbums albums = do
+    paths <- either throwError pure $ mapM toText $ P.map baseDir albums
+    void . sh $ beetImport paths
+
+importM :: (CanImport m, MonadError Text m, Logs m) => [Album] -> m ()
 importM albums = do
-  report_ "Importing albums"
-  either throwError (void . sh . beetImport) textPaths
-  report_ "Finished importing albums"
- where
-  albumPaths = P.map baseDir albums
-  textPaths  = mapM toText albumPaths
+  report "Importing albums"
+  importAlbums albums
+  report "Finished importing albums"
 
 beetImport :: [Text] -> Shell Line
 beetImport paths = inproc "beet" ("import" : paths) (pure mempty)
 
-updateM :: (MonadReader env m, CanLog env, MonadIO m) => m ()
+class CanUpdate m where
+  updateLibrary :: m [Text]
+
+instance CanUpdate App where
+  updateLibrary = Turtle.reduce Fold.list beetUpdate
+
+updateM :: (CanUpdate m, Logs m) => m ()
 updateM = do
-  report_ "Updating beets"
-  result <- Turtle.fold beetUpdate Fold.list
-  mapM_ report_ result
+  report "Updating beets"
+  result <- updateLibrary
+  mapM_ report result
 
 beetUpdate :: Shell Text
 beetUpdate = either whocares lineToText <$> doUpdate

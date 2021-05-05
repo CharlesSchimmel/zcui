@@ -1,6 +1,5 @@
 module Convert
   ( convertM
-  , deleteSongsM
   )
 where
 
@@ -11,24 +10,26 @@ import           Control.Monad
 import           Control.Monad.Except
 import           Data.Either
 import           Data.Functor
-import qualified Data.Text                     as T
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
-convertM
-  :: (MonadReader env m, CanLog env, MonadIO m, MonadError Text m)
-  => [Song]
-  -> m [ConvertedSong]
-convertM songs = do
-  report_ "Converting..."
-  mapM goConvert songs
+class CanConvert m where
+  convertSong :: Song -> m ConvertedSong
 
-goConvert :: (MonadIO m, MonadError Text m) => Song -> m ConvertedSong
+instance CanConvert App where
+  convertSong = goConvert
+
+convertM :: (CanConvert m, Logs m) => [Song] -> m [ConvertedSong]
+convertM songs = do
+  report "Converting..."
+  mapM convertSong songs
+
+goConvert :: (MonadIO m, Logs m, MonadError Text m) => Song -> m ConvertedSong
 goConvert song@(Song songPath) = do
-  liftIO . putStrLn . T.unpack $ fileName
+  report fileName
   result <- single . doConvert $ song
   either throwError pure result
  where
@@ -70,16 +71,3 @@ convertToOgg origPath oggPath = do
   case result of
     ExitSuccess   -> pure . Right $ ()
     ExitFailure _ -> pure . Left $ "Failed converting"
-
-deleteSongsM :: (MonadReader env m, CanLog env, MonadIO m) => [Song] -> m ()
-deleteSongsM songs = do
-  report_ "Deleting"
-  void $ mapM deleteSong songs
-
-deleteSong :: (MonadIO m, MonadReader env m, CanLog env) => Song -> m ()
-deleteSong (Song songPath) = do
-  report_ fileNameText
-  sh $ rm songPath
- where
-  fileNameText =
-    fromRight "(oops, could not toText song path)" (toText $ filename songPath)

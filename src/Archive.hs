@@ -1,11 +1,14 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Archive where
 
 import           Types
 
 import           Control.Monad.Except
-import           Control.Monad
 import           Control.Monad.Reader
-import           Control.Foldl                  ( list )
 import           Data.Either
 import           Data.Maybe
 import           Data.Functor                   ( ($>) )
@@ -16,20 +19,27 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-archivesM
-  :: ( MonadIO m
-     , MonadReader env m
-     , HasConfig env
-     , MonadError Text m
-     , CanLog env
-     )
+type Archiver m = RelativeAlbum -> m (Either T.Text Album)
+
+class CanArchive m where
+  getArchiver :: Archiver m
+  getArchiveStatus :: m Text
+
+instance CanArchive App where
+  getArchiver albums = do
+    opts <- asks $ archiveOptions . config
+    liftIO . mkArchiver opts $ albums
+  getArchiveStatus = asks (archiveStatus . archiveOptions . config)
+
+archiveM
+  :: (HasConfig_ m, Logs m, MonadError Text m, CanArchive m)
   => [Album]
   -> m [Album]
-archivesM albums = do
-  archOpts <- asks (archiveOptions . getConfig)
-  report_ . archiveStatus $ archOpts
-  relAlbums <- pathRelativeAlbums albums
-  archiveMany archOpts relAlbums
+archiveM albums = do
+  report =<< getArchiveStatus
+  musicDir' <- musicDir <$> getConfig_
+  relAlbums <- pathRelativeAlbums musicDir' albums
+  archiveMany getArchiver relAlbums
 
 archiveStatus :: ArchiveOptions -> Text
 archiveStatus NoArchive                       = "Skipping archiving"
@@ -41,11 +51,8 @@ archiveStatus (ZipArchive (ArchiveDir path)) = T.unwords
   ]
 
 pathRelativeAlbums
-  :: (MonadError Text m, MonadReader env m, HasConfig env)
-  => [Album]
-  -> m [RelativeAlbum]
-pathRelativeAlbums albums = do
-  musicDir <- asks (musicDir . getConfig)
+  :: (MonadError Text m) => MusicDir -> [Album] -> m [RelativeAlbum]
+pathRelativeAlbums musicDir albums = do
   maybeToErr "Could not construct destination path"
     $ P.mapM (mkRelativeAlbum musicDir) albums
 
@@ -53,29 +60,23 @@ mkRelativeAlbum :: MusicDir -> Album -> Maybe RelativeAlbum
 mkRelativeAlbum (MusicDir musicDir) album =
   RelativeAlbum album <$> stripPrefix (musicDir </> mempty) (baseDir album)
 
-archiveOne
-  :: (MonadIO m, MonadError Text m)
-  => ArchiveOptions
-  -> RelativeAlbum
-  -> m Album
-archiveOne archOpts album = do
-  result <- ((getArchiver archOpts) album)
+archiveOne :: (MonadError Text m) => Archiver m -> RelativeAlbum -> m Album
+archiveOne archiver album = do
+  result <- archiver album
   either throwError pure result
 
 archiveMany
-  :: (MonadIO m, MonadError Text m)
-  => ArchiveOptions
-  -> [RelativeAlbum]
-  -> m [Album]
-archiveMany archOpts albums = sequence $ P.map (archiveOne archOpts) albums
+  :: (MonadError Text m) => Archiver m -> [RelativeAlbum] -> m [Album]
+archiveMany archiver albums = sequence $ P.map (archiveOne archiver) albums
 
-getArchiver :: MonadIO io => ArchiveOptions -> Archiver io
-getArchiver opts albums = single $ doArchive opts albums
+mkArchiver :: MonadIO m => ArchiveOptions -> Archiver m
+mkArchiver opts albums = single $ archiverFromOptions opts albums
 
-doArchive :: ArchiveOptions -> RelativeAlbum -> Shell (Either Text Album)
-doArchive NoArchive                = const (select [])
-doArchive (ZipArchive  archiveDir) = archiveZip' archiveDir . _album
-doArchive (MoveArchive archiveDir) = archiveMove' archiveDir
+archiverFromOptions
+  :: ArchiveOptions -> RelativeAlbum -> Shell (Either Text Album)
+archiverFromOptions NoArchive                = const (select [])
+archiverFromOptions (ZipArchive  archiveDir) = archiveZip' archiveDir . _album
+archiverFromOptions (MoveArchive archiveDir) = archiveMove' archiveDir
 
 archiveZip' :: ArchiveDir -> Album -> Shell (Either Text Album)
 archiveZip' archDir album = archiveZip archDir album <&> ($> album)

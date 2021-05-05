@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Types where
 
@@ -38,26 +39,19 @@ instance HasConfig Env where
 instance HasConfig Config where
   getConfig = id
 
-class CanLog e where
-  getLogger :: e -> Text -> IO ()
+class Monad m => HasConfig_ m where
+  getConfig_ :: m Config
 
-report_ :: (MonadIO m, MonadReader env m, CanLog env) => Text -> m ()
-report_ text = do
-  logr <- asks getLogger
-  liftIO $ logr text
-
-instance CanLog Env where
-  getLogger = logFunc
+instance HasConfig_ App where
+  getConfig_ = asks config
 
 class Monad m => Logs m where
   report :: Text -> m ()
 
 instance Logs App where
   report text = do
-    log <- asks logFunc
-    liftIO $ log text
-
-type Archiver m = RelativeAlbum -> m (Either T.Text Album)
+    logWith <- asks logFunc
+    liftIO . logWith $ text
 
 data Config = Config
   { musicDir       :: MusicDir
