@@ -5,7 +5,7 @@ where
 
 import           Types
 
-import           Control.Monad.Reader           ( MonadReader )
+import           Control.Monad.Reader           ( asks )
 import           Control.Monad
 import           Control.Monad.Except
 import           Data.Either
@@ -27,13 +27,13 @@ class CanConvert m where
 
 instance CanConvert App where
   convertSong song = do
-    result <- single $ convertToOgg song
+    bitrateToUse <- asks $ bitrate . conversionOptions . config
+    result       <- single $ convertToOgg bitrateToUse song
     either throwError pure result
 
 convertM
   :: (CanConvert m, Logs m, MonadError Text m) => [Song] -> m [ConvertedSong]
 convertM songs = do
-  report "Converting..."
   let convertedSongs = P.map mkConvertedSong songs
   songsToConvert <- either throwError pure $ mapM massageSong songs
   mapM convertSong songsToConvert $> convertedSongs
@@ -45,8 +45,8 @@ massageSong :: Song -> Either Text SongToConvert
 massageSong (Song path) = SongToConvert <$> toText path <*> toText oggPath
   where oggPath = replaceExtension path ".ogg"
 
-convertToOgg :: SongToConvert -> Shell (Either Text ())
-convertToOgg (SongToConvert origPath oggPath) = do
+convertToOgg :: Bitrate -> SongToConvert -> Shell (Either Text ())
+convertToOgg bitrate (SongToConvert origPath oggPath) = do
   result <- proc
     "ffmpeg"
     [ "-loglevel"
@@ -58,7 +58,7 @@ convertToOgg (SongToConvert origPath oggPath) = do
     , "-acodec"
     , "libopus"
     , "-b:a"
-    , "128k"
+    , textBitrate bitrate
     , "-vbr"
     , "on"
     , "-vn"
@@ -70,3 +70,6 @@ convertToOgg (SongToConvert origPath oggPath) = do
   case result of
     ExitSuccess   -> pure . Right $ ()
     ExitFailure _ -> pure . Left $ "Failed converting"
+
+textBitrate :: Bitrate -> Text
+textBitrate = T.pack . (++ "k") . show

@@ -32,11 +32,8 @@ instance CanArchive App where
   getArchiveStatus = asks (archiveStatus . archiveOptions . config)
 
 archiveM
-  :: (HasConfig_ m, Logs m, MonadError Text m, CanArchive m)
-  => [Album]
-  -> m [Album]
+  :: (HasConfig_ m, MonadError Text m, CanArchive m) => [Album] -> m [Album]
 archiveM albums = do
-  report =<< getArchiveStatus
   musicDir' <- musicDir <$> getConfig_
   relAlbums <- pathRelativeAlbums musicDir' albums
   archiveMany getArchiver relAlbums
@@ -117,13 +114,8 @@ rsync source dest = either (pure . Left) id
     case result of
       ExitSuccess   -> return $ Right ()
       ExitFailure _ -> return $ syncFailureMsg source dest
-  syncFailureMsg source dest =
-    Left
-      . T.concat
-      $ [ T.pack "Failed to sync album from "
-        , _toText source
-        , " to "
-        , _toText dest
-        ]
+  syncFailureMsg source dest = Left . T.concat $ P.map
+    T.pack
+    ["Failed to sync album from ", show source, " to ", show dest]
 
 

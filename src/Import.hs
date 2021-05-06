@@ -43,7 +43,6 @@ instance CanUpdate App where
 
 updateM :: (CanUpdate m, Logs m) => m ()
 updateM = do
-  report "Updating beets"
   result <- updateLibrary
   mapM_ report result
 

@@ -44,10 +44,3 @@ albumMapFold = Fold foldy HM.empty id
   foldy :: Map AlbumPath [Song] -> FilePath -> Map AlbumPath [Song]
   foldy accumulatedMap flacPath =
     insertWith (++) (directory flacPath) [Song flacPath] accumulatedMap
-
-findAlbumsM :: (MonadError Text m, Logs m, CanFindAlbums m) => m [Album]
-findAlbumsM = do
-  albums <- findAlbums
-  report . T.unlines $ "Found albums:" : P.map artistAlbum albums
-  return albums
-

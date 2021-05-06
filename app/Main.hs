@@ -5,7 +5,9 @@ import           Options
 import           Types
 
 import           Control.Monad.Except
+import           Data.Functor                   ( ($>) )
 import           Control.Monad.Reader
+import           Data.Text.IO                  as T
 import           Data.Text                     as T
                                          hiding ( find
                                                 , stripPrefix
@@ -19,41 +21,44 @@ main = do
     args   <- doParseArgs
     optsOk <- verifyOptions args
     let env = mkEnv <$> optsOk
-    either print runProgram env
+    either T.putStrLn runProgram env
 
 runProgram :: Env -> IO ()
 runProgram env = do
-    either print pure =<< runExceptT (runReaderT (runApp zcuiM) env)
+    either T.putStrLn pure =<< runExceptT (runReaderT (runApp zcuiM) env)
 
 mkEnv :: Config -> Env
 mkEnv conf = Env conf oldLogger
 
 oldLogger :: MonadIO io => Text -> io ()
-oldLogger = liftIO . putStrLn . T.unpack
+oldLogger = liftIO . T.putStrLn
 
 verifyOptions :: Arguments -> IO (Either Text Config)
 verifyOptions Arguments {..} = do
     music   <- testMusicDir argMusicDir
     archive <- testArchive argArchiveOptions
-    pure $ Config <$> music <*> archive
+    let convOpts = testConversionOptions argConversionOptions
+    pure $ Config <$> music <*> archive <*> convOpts
+
+testConversionOptions copts@(ConversionOptions (Bitrate bitrate)) =
+    if bitrate > 32 && bitrate < 512
+        then pure copts
+        else Left "Bitrate must be between 32-512"
 
 testMusicDir :: MusicDir -> IO (Either Text MusicDir)
-testMusicDir musicDir@(MusicDir path) = pure musicDir <$ testdir' path
+testMusicDir musicDir@(MusicDir path) =
+    (fmap $ const musicDir) <$> testdir' path
 
 testArchive :: ArchiveOptions -> IO (Either Text ArchiveOptions)
 testArchive NoArchive = pure . pure $ NoArchive
 testArchive opts@(MoveArchive (ArchiveDir archDir)) =
-    pure opts <$ testdir' archDir
+    (fmap $ const opts) <$> testdir' archDir
 testArchive opts@(ZipArchive (ArchiveDir archDir)) =
-    pure opts <$ testdir' archDir
+    (fmap $ const opts) <$> testdir' archDir
 
 testdir' :: FilePath -> IO (Either Text FilePath)
-testdir' = testdir'' testdir
-
-testdir''
-    :: Monad m => (FilePath -> m Bool) -> FilePath -> m (Either Text FilePath)
-testdir'' tester path = do
-    pathExists <- tester path
+testdir' path = do
+    pathExists <- testdir path
     if pathExists
         then pure . Right $ path
         else

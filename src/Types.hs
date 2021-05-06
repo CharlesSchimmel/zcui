@@ -45,8 +45,9 @@ instance Logs App where
     liftIO . logWith $ text
 
 data Config = Config
-  { musicDir       :: MusicDir
-  , archiveOptions :: ArchiveOptions
+  { musicDir          :: MusicDir
+  , archiveOptions    :: ArchiveOptions
+  , conversionOptions :: ConversionOptions
   }
 
 data Album = Album
@@ -87,8 +88,11 @@ data ConvertedSong = ConvertedSong
   }
   deriving Show
 
+newtype Bitrate = Bitrate Int
+  deriving Show
+
 data ConversionOptions = ConversionOptions
-  { bitrate :: Int
+  { bitrate :: Bitrate
   }
   deriving Show
 

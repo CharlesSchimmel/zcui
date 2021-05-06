@@ -24,7 +24,6 @@ instance CanDelete App where
 
 deleteSongsM :: (Logs m, CanDelete m) => [Song] -> m ()
 deleteSongsM songs = do
-  report "Deleting"
   void $ mapM delete songs
 
 deleteSong :: (MonadIO m, Logs m) => Song -> m ()
