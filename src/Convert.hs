@@ -12,42 +12,41 @@ import           Data.Either
 import           Data.Functor
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
+import           Data.Text                     as T
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
+data SongToConvert = SongToConvert
+  { inputPath  :: Text
+  , outputPath :: Text
+  }
+
 class CanConvert m where
-  convertSong :: Song -> m ConvertedSong
+  convertSong :: SongToConvert -> m ()
 
 instance CanConvert App where
-  convertSong = goConvert
+  convertSong song = do
+    result <- single $ convertToOgg song
+    either throwError pure result
 
-convertM :: (CanConvert m, Logs m) => [Song] -> m [ConvertedSong]
+convertM
+  :: (CanConvert m, Logs m, MonadError Text m) => [Song] -> m [ConvertedSong]
 convertM songs = do
   report "Converting..."
-  mapM convertSong songs
-
-goConvert :: (MonadIO m, Logs m, MonadError Text m) => Song -> m ConvertedSong
-goConvert song@(Song songPath) = do
-  report fileName
-  result <- single . doConvert $ song
-  either throwError pure result
+  let convertedSongs = P.map mkConvertedSong songs
+  songsToConvert <- either throwError pure $ mapM massageSong songs
+  mapM convertSong songsToConvert $> convertedSongs
  where
-  fileName =
-    fromRight "(oops, could not toText song path)" (toText $ filename songPath)
+  mkConvertedSong s@(Song path) =
+    ConvertedSong s . Song $ replaceExtension path ".ogg"
 
-doConvert :: Song -> Shell (Either Text ConvertedSong)
-doConvert song@Song {..} =
-  either (pure . Left) id $ convert' <$> textSongPath <*> textOggPath
- where
-  oggPath       = replaceExtension songPath "ogg"
-  textSongPath  = toText songPath
-  textOggPath   = toText oggPath
-  convertedSong = ConvertedSong song (Song oggPath)
-  convert' orig ogg = convertToOgg orig ogg <&> ($> convertedSong)
+massageSong :: Song -> Either Text SongToConvert
+massageSong (Song path) = SongToConvert <$> toText path <*> toText oggPath
+  where oggPath = replaceExtension path ".ogg"
 
-convertToOgg :: Text -> Text -> Shell (Either Text ())
-convertToOgg origPath oggPath = do
+convertToOgg :: SongToConvert -> Shell (Either Text ())
+convertToOgg (SongToConvert origPath oggPath) = do
   result <- proc
     "ffmpeg"
     [ "-loglevel"

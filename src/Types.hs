@@ -30,15 +30,6 @@ data Env = Env
   , logFunc :: Text -> IO ()
   }
 
-class HasConfig a where
-  getConfig :: a -> Config
-
-instance HasConfig Env where
-  getConfig = config
-
-instance HasConfig Config where
-  getConfig = id
-
 class Monad m => HasConfig_ m where
   getConfig_ :: m Config
 

@@ -10,7 +10,6 @@ import           Types
 import           Control.Monad.Except
 import           Prelude                       as P
                                          hiding ( FilePath )
-import           Turtle
 
 zcuiM :: App ()
 zcuiM = do
@@ -20,4 +19,4 @@ zcuiM = do
     _              <- deleteSongsM $ P.map originalSong convertedSongs
     _              <- updateM
     _              <- importM archived
-    report_ "All done :)"
+    report "All done :)"
