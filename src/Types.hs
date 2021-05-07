@@ -51,10 +51,11 @@ data Config = Config
   }
 
 data Album = Album
-  { baseDir    :: FilePath
-  , albumName  :: Text
-  , artistName :: Text
-  , songs      :: [Song]
+  { relativePath :: FilePath
+  , absolutePath :: FilePath
+  , albumName    :: Text
+  , artistName   :: Text
+  , songs        :: [Song]
   }
   deriving Show
 
@@ -96,14 +97,7 @@ data ConversionOptions = ConversionOptions
   }
   deriving Show
 
-_toText = fromRight "" . toText
+_toText path = fromRight (T.pack $ show path) $ toText path
 
 maybeToErr :: MonadError Text m => Text -> Maybe a -> m a
 maybeToErr msg = maybe (throwError msg) pure
-
-data RelativeAlbum = RelativeAlbum
-  { _album       :: Album
-  , relativePath :: FilePath
-  }
-  deriving Show
-

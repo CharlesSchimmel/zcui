@@ -16,14 +16,13 @@ import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
-import           Control.Monad.Reader           ( MonadReader )
 
 class CanImport m where
   importAlbums :: [Album] -> m ()
 
 instance CanImport App where
   importAlbums albums = do
-    paths <- either throwError pure $ mapM toText $ P.map baseDir albums
+    paths <- either throwError pure $ mapM toText $ P.map absolutePath albums
     void . sh $ beetImport paths
 
 importM :: (CanImport m, MonadError Text m, Logs m) => [Album] -> m ()

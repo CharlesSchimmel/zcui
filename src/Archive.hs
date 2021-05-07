@@ -10,7 +10,6 @@ import           Types
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Data.Either
-import           Data.Maybe
 import           Data.Functor                   ( ($>) )
 import qualified Data.Text                     as T
 import           Filesystem.Path
@@ -19,7 +18,7 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-type Archiver m = RelativeAlbum -> m (Either T.Text Album)
+type Archiver m = Album -> m (Either T.Text ())
 
 class CanArchive m where
   getArchiver :: Archiver m
@@ -28,88 +27,68 @@ class CanArchive m where
 instance CanArchive App where
   getArchiver albums = do
     opts <- asks $ archiveOptions . config
-    liftIO . mkArchiver opts $ albums
+    archiverFromOptions opts $ albums
   getArchiveStatus = asks (archiveStatus . archiveOptions . config)
+
+data ArchiveTarget = ArchiveTarget
+  { source :: Text
+  , dest   :: Text
+  }
 
 archiveM
   :: (HasConfig_ m, MonadError Text m, CanArchive m) => [Album] -> m [Album]
-archiveM albums = do
-  musicDir' <- musicDir <$> getConfig_
-  relAlbums <- pathRelativeAlbums musicDir' albums
-  archiveMany getArchiver relAlbums
+archiveM = sequence . P.map (archiveOne getArchiver)
 
 archiveStatus :: ArchiveOptions -> Text
-archiveStatus NoArchive                       = "Skipping archiving"
-archiveStatus (MoveArchive (ArchiveDir path)) = T.unwords
-  ["Moving albums to", fromRight "could not parse archive path" . toText $ path]
-archiveStatus (ZipArchive (ArchiveDir path)) = T.unwords
-  [ "Zipping albums to"
-  , fromRight "could not parse archive path" . toText $ path
-  ]
+archiveStatus NoArchive = "Skipping archiving"
+archiveStatus (MoveArchive (ArchiveDir path)) =
+  T.unwords ["Moving albums to", _toText $ path]
+archiveStatus (ZipArchive (ArchiveDir path)) =
+  T.unwords ["Zipping albums to", _toText $ path]
 
-pathRelativeAlbums
-  :: (MonadError Text m) => MusicDir -> [Album] -> m [RelativeAlbum]
-pathRelativeAlbums musicDir albums = do
-  maybeToErr "Could not construct destination path"
-    $ P.mapM (mkRelativeAlbum musicDir) albums
-
-mkRelativeAlbum :: MusicDir -> Album -> Maybe RelativeAlbum
-mkRelativeAlbum (MusicDir musicDir) album =
-  RelativeAlbum album <$> stripPrefix (musicDir </> mempty) (baseDir album)
-
-archiveOne :: (MonadError Text m) => Archiver m -> RelativeAlbum -> m Album
+archiveOne :: (MonadError Text m) => Archiver m -> Album -> m Album
 archiveOne archiver album = do
   result <- archiver album
-  either throwError pure result
+  either throwError pure $ result $> album
 
-archiveMany
-  :: (MonadError Text m) => Archiver m -> [RelativeAlbum] -> m [Album]
-archiveMany archiver albums = sequence $ P.map (archiveOne archiver) albums
+archiverFromOptions :: ArchiveOptions -> Album -> App (Either Text ())
+archiverFromOptions NoArchive                = const . pure . pure $ ()
+archiverFromOptions (ZipArchive  archiveDir) = archiveZip archiveDir
+archiverFromOptions (MoveArchive archiveDir) = archiveMove archiveDir
 
-mkArchiver :: MonadIO m => ArchiveOptions -> Archiver m
-mkArchiver opts albums = single $ archiverFromOptions opts albums
+archiveZip :: ArchiveDir -> Album -> App (Either Text ())
+archiveZip archive album = do
+  target <- either throwError pure $ mkZipTarget archive album
+  single $ zap target
 
-archiverFromOptions
-  :: ArchiveOptions -> RelativeAlbum -> Shell (Either Text Album)
-archiverFromOptions NoArchive                = const (select [])
-archiverFromOptions (ZipArchive  archiveDir) = archiveZip' archiveDir . _album
-archiverFromOptions (MoveArchive archiveDir) = archiveMove' archiveDir
+mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
+mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
+  let zipName    = fromText $ T.concat [artistAlbum album, ".7z"]
+      outputFile = archDir </> zipName
+  source <- toText albumDir
+  dest   <- toText outputFile
+  pure $ ArchiveTarget source dest
 
-archiveZip' :: ArchiveDir -> Album -> Shell (Either Text Album)
-archiveZip' archDir album = archiveZip archDir album <&> ($> album)
-
-archiveMove' :: ArchiveDir -> RelativeAlbum -> Shell (Either Text Album)
-archiveMove' archDir album = archiveMove archDir album <&> ($> (_album album))
-
-archiveZip :: ArchiveDir -> Album -> Shell (Either Text ())
-archiveZip archive album@Album {..} = zap (buildZipPath archive album) baseDir
-
-buildZipPath :: ArchiveDir -> Album -> FilePath
-buildZipPath (ArchiveDir dir) album =
-  dir </> (fromText $ T.concat [artistAlbum album, ".7z"])
-
-zap :: FilePath -> FilePath -> Shell (Either Text ())
-zap zipFilePath folderToZip = either (pure . Left) id
-  $ liftM2 doZip (toText folderToZip) (toText zipFilePath)
-
-doZip :: Text -> Text -> Shell (Either Text ())
-doZip folderToZip zipDest = do
+zap :: ArchiveTarget -> Shell (Either Text ())
+zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
   result <- inprocWithErr "7z" ["a", zipDest, folderToZip] (pure mempty)
   return $ either (Left . linesToText . pure) (const $ Right ()) result
 
-archiveMove :: ArchiveDir -> RelativeAlbum -> Shell (Either Text ())
-archiveMove (ArchiveDir storageBase) album = do
-  let storageAlbumPath = storageBase </> relativePath album
-  mktree storageAlbumPath
-  rsync (baseDir . _album $ album) storageAlbumPath
+archiveMove :: ArchiveDir -> Album -> App (Either Text ())
+archiveMove archive album = do
+  target <- either throwError pure $ mkMoveTarget archive album
+  mktree . fromText $ dest target
+  single $ rsync target
 
-rsync :: FilePath -> FilePath -> Shell (Either Text ())
-rsync source dest =
-  either (pure . Left) id $ liftM2 doRsync (toText source) (toText dest)
+mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
+mkMoveTarget (ArchiveDir archDir) Album { absolutePath, relativePath } = do
+  source <- toText absolutePath
+  dest   <- toText $ archDir </> relativePath
+  pure $ ArchiveTarget source dest
 
-doRsync :: Text -> Text -> Shell (Either Text ())
-doRsync source dest = do
-  result <- proc "rsync" [source, "-r", "--append-verify", source] (pure mempty)
+rsync :: ArchiveTarget -> Shell (Either Text ())
+rsync (ArchiveTarget source dest) = do
+  result <- proc "rsync" [source, "-r", "--append-verify", dest] (pure mempty)
   case result of
     ExitSuccess   -> return $ Right ()
     ExitFailure _ -> return $ syncFailureMsg
@@ -117,5 +96,3 @@ doRsync source dest = do
   syncFailureMsg =
     Left $ T.unwords ["Failed to sync album from", source, " to ", dest]
 
-mkZipPath :: RelativeAlbum -> Either Text (Text, Text)
-mkZipPath relAlbum

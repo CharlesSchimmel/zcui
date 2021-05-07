@@ -6,10 +6,9 @@ module Find where
 
 import           Types
 
-import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Data.HashMap                  as HM
-import qualified Data.Text                     as T
+import           Data.Maybe                     ( fromMaybe )
 import           Filesystem.Path
 import           Prelude                       as P
                                          hiding ( FilePath )
@@ -20,9 +19,9 @@ class CanFindAlbums m where
 
 instance CanFindAlbums App where
   findAlbums = do
-    flacs    <- findFlacs <$> asks (unMusicDir . musicDir . config)
-    albumMap <- reduce albumMapFold flacs
-    let albums = P.map mkAlbum $ toList albumMap
+    musicDir <- asks $ musicDir . config
+    albumMap <- reduce albumMapFold $ findFlacs $ unMusicDir musicDir
+    let albums = P.map (mkAlbum musicDir) $ toList albumMap
     pure albums
 
 findFlacs :: FilePath -> Shell FilePath
@@ -30,13 +29,18 @@ findFlacs = find (suffix ".flac")
 
 type AlbumPath = FilePath
 
-mkAlbum :: (AlbumPath, [Song]) -> Album
-mkAlbum (albumPath, songs) = Album
-  { baseDir    = albumPath
-  , albumName  = _toText . dirname . directory $ albumPath
-  , artistName = _toText . dirname . parent . directory $ albumPath
-  , songs      = songs
+mkAlbum :: MusicDir -> (AlbumPath, [Song]) -> Album
+mkAlbum (MusicDir rootDir) (albumPath, songs) = Album
+  { absolutePath = albumPath
+  , relativePath = relPath
+  , albumName    = _toText . dirname . directory $ albumPath
+  , artistName   = _toText . dirname . parent . directory $ albumPath
+  , songs        = songs
   }
+ where
+  rootWithTrailingSlash = rootDir </> mempty
+  relPath =
+    fromMaybe "impossible" $ stripPrefix rootWithTrailingSlash albumPath
 
 albumMapFold :: Fold FilePath (Map AlbumPath [Song])
 albumMapFold = Fold foldy HM.empty id
