@@ -9,6 +9,7 @@ import           Types
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Data.Maybe                     ( fromMaybe )
 import           Data.Either
 import           Data.Functor                   ( ($>) )
 import qualified Data.Text                     as T
@@ -18,7 +19,7 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-type Archiver m = Album -> m (Either T.Text ())
+type Archiver m = Album -> m (Either Text ())
 
 class CanArchive m where
   getArchiver :: Archiver m
@@ -59,7 +60,7 @@ archiverFromOptions (MoveArchive archiveDir) = archiveMove archiveDir
 archiveZip :: ArchiveDir -> Album -> App (Either Text ())
 archiveZip archive album = do
   target <- either throwError pure $ mkZipTarget archive album
-  single $ zap target
+  checkTargetDoesNotExist target (single $ zap target)
 
 mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
@@ -77,8 +78,9 @@ zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
 archiveMove :: ArchiveDir -> Album -> App (Either Text ())
 archiveMove archive album = do
   target <- either throwError pure $ mkMoveTarget archive album
-  mktree . fromText $ dest target
-  single $ rsync target
+  checkTargetDoesNotExist target $ do
+    mktree . fromText $ dest target
+    single $ rsync target
 
 mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkMoveTarget (ArchiveDir archDir) Album { absolutePath, relativePath } = do
@@ -96,3 +98,30 @@ rsync (ArchiveTarget source dest) = do
   syncFailureMsg =
     Left $ T.unwords ["Failed to sync album from", source, " to ", dest]
 
+checkTargetDoesNotExist
+  :: ArchiveTarget -> App (Either Text ()) -> App (Either Text ())
+checkTargetDoesNotExist ArchiveTarget { dest } continuation = do
+  doesExist <- testpath $ fromText dest
+  if not doesExist then continuation else confirmOverwrite
+ where
+  confirmOverwrite = do
+    confirmation <- readResponse dest
+    if confirmation
+      then continuation
+      else do
+        report $ T.unwords ["Ok, skipping destination:", dest]
+        pure . pure $ ()
+
+readResponse :: Text -> App Bool
+readResponse dest = do
+  report
+    $ T.unwords ["Continue with archiving and possible overrwrite", dest, "?"]
+  rawResponse <- readline
+  let response = lineToText $ fromMaybe "" rawResponse
+  case response of
+    "y" -> pure True
+    "Y" -> pure True
+    ""  -> pure True
+    "n" -> pure False
+    "N" -> pure False
+    _   -> throwError "Unrecognized response, bombing out."
