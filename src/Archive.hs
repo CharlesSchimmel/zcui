@@ -85,18 +85,17 @@ archiveZip :: ArchiveDir -> Album -> Shell (Either Text ())
 archiveZip archive album@Album {..} = zap (buildZipPath archive album) baseDir
 
 buildZipPath :: ArchiveDir -> Album -> FilePath
-buildZipPath (ArchiveDir dir) album = dir </> fromText (buildZipName album)
-
-buildZipName :: Album -> Text
-buildZipName album = T.concat [artistAlbum album, ".7z"]
+buildZipPath (ArchiveDir dir) album =
+  dir </> (fromText $ T.concat [artistAlbum album, ".7z"])
 
 zap :: FilePath -> FilePath -> Shell (Either Text ())
 zap zipFilePath folderToZip = either (pure . Left) id
-  $ liftM2 zap_ (toText zipFilePath) (toText folderToZip)
- where
-  zap_ zipFile zipTarget =
-    either (Left . linesToText . pure) (const $ Right ())
-      <$> inprocWithErr "7z" ["a", zipFile, zipTarget] (pure mempty)
+  $ liftM2 doZip (toText folderToZip) (toText zipFilePath)
+
+doZip :: Text -> Text -> Shell (Either Text ())
+doZip folderToZip zipDest = do
+  result <- inprocWithErr "7z" ["a", zipDest, folderToZip] (pure mempty)
+  return $ either (Left . linesToText . pure) (const $ Right ()) result
 
 archiveMove :: ArchiveDir -> RelativeAlbum -> Shell (Either Text ())
 archiveMove (ArchiveDir storageBase) album = do
@@ -105,17 +104,18 @@ archiveMove (ArchiveDir storageBase) album = do
   rsync (baseDir . _album $ album) storageAlbumPath
 
 rsync :: FilePath -> FilePath -> Shell (Either Text ())
-rsync source dest = either (pure . Left) id
-  $ liftM2 rsync_ (toText source) (toText dest)
+rsync source dest =
+  either (pure . Left) id $ liftM2 doRsync (toText source) (toText dest)
+
+doRsync :: Text -> Text -> Shell (Either Text ())
+doRsync source dest = do
+  result <- proc "rsync" [source, "-r", "--append-verify", source] (pure mempty)
+  case result of
+    ExitSuccess   -> return $ Right ()
+    ExitFailure _ -> return $ syncFailureMsg
  where
-  rsync_ :: Text -> Text -> Shell (Either Text ())
-  rsync_ s d = do
-    result <- proc "rsync" [s, "-r", "--append-verify", d] (pure mempty)
-    case result of
-      ExitSuccess   -> return $ Right ()
-      ExitFailure _ -> return $ syncFailureMsg source dest
-  syncFailureMsg source dest = Left . T.concat $ P.map
-    T.pack
-    ["Failed to sync album from ", show source, " to ", show dest]
+  syncFailureMsg =
+    Left $ T.unwords ["Failed to sync album from", source, " to ", dest]
 
-
+mkZipPath :: RelativeAlbum -> Either Text (Text, Text)
+mkZipPath relAlbum
