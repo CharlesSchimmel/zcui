@@ -36,6 +36,8 @@ data ArchiveTarget = ArchiveTarget
   , dest   :: Text
   }
 
+data ArchiveResult = Archived Album | Skipped Album
+
 archiveM
   :: (HasConfig_ m, MonadError Text m, CanArchive m) => [Album] -> m [Album]
 archiveM = sequence . P.map (archiveOne getArchiver)
@@ -59,8 +61,9 @@ archiverFromOptions (MoveArchive archiveDir) = archiveMove archiveDir
 
 archiveZip :: ArchiveDir -> Album -> App (Either Text ())
 archiveZip archive album = do
-  target <- either throwError pure $ mkZipTarget archive album
-  checkTargetDoesNotExist target (single $ zap target)
+  target@ArchiveTarget { dest } <- either throwError pure
+    $ mkZipTarget archive album
+  checkOverwrite dest (single $ zap target)
 
 mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
@@ -77,9 +80,10 @@ zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
 
 archiveMove :: ArchiveDir -> Album -> App (Either Text ())
 archiveMove archive album = do
-  target <- either throwError pure $ mkMoveTarget archive album
-  checkTargetDoesNotExist target $ do
-    mktree . fromText $ dest target
+  target@ArchiveTarget { dest } <- either throwError pure
+    $ mkMoveTarget archive album
+  checkOverwrite dest $ do
+    mktree $ fromText dest
     single $ rsync target
 
 mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
@@ -98,26 +102,43 @@ rsync (ArchiveTarget source dest) = do
   syncFailureMsg =
     Left $ T.unwords ["Failed to sync album from", source, " to ", dest]
 
-checkTargetDoesNotExist
-  :: ArchiveTarget -> App (Either Text ()) -> App (Either Text ())
-checkTargetDoesNotExist ArchiveTarget { dest } continuation = do
-  doesExist <- testpath $ fromText dest
-  if not doesExist then continuation else confirmOverwrite
- where
-  confirmOverwrite = do
-    confirmation <- readResponse dest
-    if confirmation
-      then continuation
-      else do
-        report $ T.unwords ["Ok, skipping destination:", dest]
-        pure . pure $ ()
+class CanTestPath m where
+  pathExists :: FilePath -> m Bool
 
-readResponse :: Text -> App Bool
-readResponse dest = do
-  report
-    $ T.unwords ["Continue with archiving and possible overrwrite", dest, "?"]
-  rawResponse <- readline
-  let response = lineToText $ fromMaybe "" rawResponse
+instance CanTestPath App where
+  pathExists = testpath
+
+class CanGetResponse m where
+  getResponse :: Text -> m Text
+
+instance CanGetResponse App where
+  getResponse prompt = do
+    report prompt
+    rawResponse <- readline
+    pure . lineToText . fromMaybe "" $ rawResponse
+
+checkOverwrite
+  :: (Logs m, CanTestPath m, MonadError Text m, CanGetResponse m)
+  => Text
+  -> m (Either Text ())
+  -> m (Either Text ())
+checkOverwrite dest continuation = do
+  doesExist <- pathExists $ fromText dest
+  if not doesExist
+    then continuation
+    else do
+      confirmation <- parseResponse dest
+      if confirmation
+        then continuation
+        else do
+          report $ T.unwords ["Ok, skipping destination:", dest]
+          pure . Left $ T.unwords [dest, "was skipped"]
+
+parseResponse
+  :: (CanGetResponse m, MonadError Text m, Logs m) => Text -> m Bool
+parseResponse dest = do
+  response <- getResponse
+    $ T.unwords ["Continue with archiving and possible overwrite", dest, "?"]
   case response of
     "y" -> pure True
     "Y" -> pure True
