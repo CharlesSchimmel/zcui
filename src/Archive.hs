@@ -6,6 +6,7 @@
 module Archive where
 
 import           Types
+import           Util
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
@@ -13,11 +14,14 @@ import           Data.Maybe                     ( fromMaybe )
 import           Data.Either
 import           Data.Functor                   ( ($>) )
 import qualified Data.Text                     as T
+import qualified Control.Foldl                 as Fold
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
+
+import           Debug.Trace
 
 type Archiver m = Album -> m (Either Text ())
 
@@ -26,9 +30,10 @@ class CanArchive m where
   getArchiveStatus :: m Text
 
 instance CanArchive App where
-  getArchiver albums = do
+  getArchiver album = do
+    report . T.unwords $ ["Archiving", artistAlbum album]
     opts <- asks $ archiveOptions . config
-    archiverFromOptions opts $ albums
+    archiverFromOptions opts $ album
   getArchiveStatus = asks (archiveStatus . archiveOptions . config)
 
 data ArchiveTarget = ArchiveTarget
@@ -36,10 +41,7 @@ data ArchiveTarget = ArchiveTarget
   , dest   :: Text
   }
 
-data ArchiveResult = Archived Album | Skipped Album
-
-archiveM
-  :: (HasConfig_ m, MonadError Text m, CanArchive m) => [Album] -> m [Album]
+archiveM :: (MonadError Text m, CanArchive m) => [Album] -> m [Album]
 archiveM = sequence . P.map (archiveOne getArchiver)
 
 archiveStatus :: ArchiveOptions -> Text
@@ -63,7 +65,9 @@ archiveZip :: ArchiveDir -> Album -> App (Either Text ())
 archiveZip archive album = do
   target@ArchiveTarget { dest } <- either throwError pure
     $ mkZipTarget archive album
-  checkOverwrite dest (single $ zap target)
+  checkOverwrite dest $ do
+    result <- reduce collectEithers $ zap target
+    pure $ biMap T.unlines (const ()) result
 
 mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do

@@ -5,6 +5,7 @@
 module Find where
 
 import           Types
+import           Util
 
 import           Control.Monad.Reader
 import           Data.HashMap                  as HM

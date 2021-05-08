@@ -6,7 +6,6 @@
 module Types where
 
 import           Control.Monad.Except           ( ExceptT
-                                                , throwError
                                                 , MonadError
                                                 )
 import           Control.Monad.Reader           ( ReaderT
@@ -96,8 +95,3 @@ data ConversionOptions = ConversionOptions
   { bitrate :: Bitrate
   }
   deriving Show
-
-_toText path = fromRight (T.pack $ show path) $ toText path
-
-maybeToErr :: MonadError Text m => Text -> Maybe a -> m a
-maybeToErr msg = maybe (throwError msg) pure

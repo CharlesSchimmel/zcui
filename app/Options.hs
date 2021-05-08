@@ -27,7 +27,7 @@ argParse = Arguments <$> musicDirParse <*> archiveOpts <*> conversionsOpts
 
 musicDirParse :: Parser MusicDir
 musicDirParse =
-  MusicDir <$> optPath "music-dir" 'm' "Music directory to search"
+  MusicDir <$> optPath "library-dir" 'l' "Music library directory to search"
 
 moveArch :: Parser ArchiveOptions
 moveArch = MoveArchive . ArchiveDir <$> optPath

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cbe3665ae0dd28659ecf68c6e2d0696cb248076c83841d25243eda0f48d8d66a
+-- hash: d42e5c3111caedd93c237348d306ade6eebeacf568e334c648aed637f1b40a9f
 
 name:           zcui
 version:        0.1.0.0
@@ -34,6 +34,7 @@ library
       Import
       Lib
       Types
+      Util
   other-modules:
       Paths_zcui
   hs-source-dirs:
