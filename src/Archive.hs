@@ -21,12 +21,10 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-import           Debug.Trace
-
 type Archiver m = Album -> m (Either Text ())
 
 class CanArchive m where
-  getArchiver :: Archiver m
+  getArchiver :: Album -> m (Either Text ())
   getArchiveStatus :: m Text
 
 instance CanArchive App where
@@ -41,8 +39,32 @@ data ArchiveTarget = ArchiveTarget
   , dest   :: Text
   }
 
-archiveM :: (MonadError Text m, CanArchive m) => [Album] -> m [Album]
-archiveM = sequence . P.map (archiveOne getArchiver)
+data ArchiveFailure = ArchiveFailure Album Text
+
+archiveM
+  :: (MonadError Text m, CanArchive m, Monad m, Logs m) => [Album] -> m [Album]
+archiveM albums = do
+  results <- sequence $ P.map (archiveOne getArchiver) albums
+  let (lefts, rights) = partitionEithers results
+  tellArchiveFailures lefts
+  pure rights
+
+tellArchiveFailures :: Logs m => [ArchiveFailure] -> m ()
+tellArchiveFailures fails = do
+  if P.null fails
+    then pure ()
+    else
+      report
+      . T.unwords
+      . P.map T.pack
+      $ [show $ P.length fails, "albums could not be archived"]
+  let reasons    = P.map tellFailure fails
+      withIndent = P.map (\x -> T.append "\t" x) reasons
+  report . T.unlines $ withIndent
+
+tellFailure :: ArchiveFailure -> Text
+tellFailure (ArchiveFailure album reason) =
+  T.unwords [artistAlbum album, "failed with reason:", reason]
 
 archiveStatus :: ArchiveOptions -> Text
 archiveStatus NoArchive = "Skipping archiving"
@@ -51,10 +73,10 @@ archiveStatus (MoveArchive (ArchiveDir path)) =
 archiveStatus (ZipArchive (ArchiveDir path)) =
   T.unwords ["Zipping albums to", _toText $ path]
 
-archiveOne :: (MonadError Text m) => Archiver m -> Album -> m Album
-archiveOne archiver album = do
-  result <- archiver album
-  either throwError pure $ result $> album
+archiveOne
+  :: (Monad m) => Archiver m -> Album -> m (Either ArchiveFailure Album)
+archiveOne archiver album =
+  biMap (ArchiveFailure album) (const album) <$> archiver album
 
 archiverFromOptions :: ArchiveOptions -> Album -> App (Either Text ())
 archiverFromOptions NoArchive                = const . pure . pure $ ()
@@ -63,9 +85,10 @@ archiverFromOptions (MoveArchive archiveDir) = archiveMove archiveDir
 
 archiveZip :: ArchiveDir -> Album -> App (Either Text ())
 archiveZip archive album = do
-  target@ArchiveTarget { dest } <- either throwError pure
-    $ mkZipTarget archive album
-  checkOverwrite dest $ do
+  let targetResult = mkZipTarget archive album
+  either (pure . Left) proceed targetResult
+ where
+  proceed target@ArchiveTarget { dest } = checkOverwrite dest $ do
     result <- reduce collectEithers $ zap target
     pure $ biMap T.unlines (const ()) result
 
@@ -84,9 +107,10 @@ zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
 
 archiveMove :: ArchiveDir -> Album -> App (Either Text ())
 archiveMove archive album = do
-  target@ArchiveTarget { dest } <- either throwError pure
-    $ mkMoveTarget archive album
-  checkOverwrite dest $ do
+  let targetResult = mkMoveTarget archive album
+  either (pure . Left) proceed targetResult
+ where
+  proceed target@ArchiveTarget { dest } = checkOverwrite dest $ do
     mktree $ fromText dest
     single $ rsync target
 
