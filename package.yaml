@@ -29,6 +29,7 @@ dependencies:
 - hashmap
 - hashable
 - unordered-containers
+- transformers
 - mtl
 - foldl
 

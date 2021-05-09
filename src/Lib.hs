@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Lib where
 
 import           Archive
@@ -8,9 +10,13 @@ import           Find
 import           Types
 import           Data.Text                     as T
 
+import           Data.Functor
+import           Control.Monad.Trans.Maybe
 import           Control.Monad.Except
 import           Prelude                       as P
                                          hiding ( FilePath )
+
+type MaybeApp a = MaybeT App a
 
 zcuiM :: App ()
 zcuiM = do
@@ -20,18 +26,26 @@ zcuiM = do
         else do
             report . T.unlines $ "Found albums:" : P.map artistAlbum albums
 
-            report =<< getArchiveStatus
-            archived <- archiveM albums
+            void . runMaybeT $ do
+                archived <- asMaybeT_ albums $ \a -> do
+                    report =<< getArchiveStatus
+                    archiveM a
 
-            report "Converting..."
-            convertedSongs <- convertM (archived >>= songs)
+                converted <- asMaybeT_ archived $ \a -> do
+                    report "Converting"
+                    convertM . (>>= songs) $ a
 
-            report "Deleting"
-            _ <- deleteSongsM $ P.map originalSong convertedSongs
+                _ <- asMaybeT_ converted $ deleteSongsM . P.map originalSong
 
-            report "Updating beets"
-            _ <- updateM
+                _ <- asMaybeT_ archived $ const updateM
 
-            _ <- importM archived
-            pure ()
+                _ <- asMaybeT_ archived $ importM
+
+                return ()
     report "All done :)"
+
+asMaybeT_ = flip asMaybeT
+
+asMaybeT :: Monad m => ([a] -> m b) -> [a] -> MaybeT m b
+asMaybeT fn as =
+    if P.null as then (MaybeT $ pure Nothing) else MaybeT $ (Just <$> (fn as))
