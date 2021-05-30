@@ -43,6 +43,7 @@ data Config = Config
   { musicDir          :: MusicDir
   , archiveOptions    :: ArchiveOptions
   , conversionOptions :: ConversionOptions
+  , dryRun            :: Bool
   }
 
 data Album = Album

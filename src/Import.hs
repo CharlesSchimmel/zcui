@@ -1,14 +1,14 @@
 module Import
   ( importM
   , updateM
-  )
-where
+  ) where
 
 import           Types
 
 import qualified Control.Foldl                 as Fold
 import           Control.Monad
 import           Control.Monad.Except
+import           Control.Monad.Reader           ( asks )
 import           Data.Either
 import           Data.Functor
 import qualified Data.Text                     as T
@@ -22,8 +22,12 @@ class CanImport m where
 
 instance CanImport App where
   importAlbums albums = do
-    paths <- either throwError pure $ mapM toText $ P.map absolutePath albums
-    void . sh $ beetImport paths
+    isDryRun <- asks $ dryRun . config
+    if isDryRun
+      then pure ()
+      else do
+        paths <- either throwError pure $ mapM (toText . absolutePath) albums
+        void . sh $ beetImport paths
 
 importM :: (CanImport m, MonadError Text m, Logs m) => [Album] -> m ()
 importM albums = do
@@ -38,7 +42,9 @@ class CanUpdate m where
   updateLibrary :: m [Text]
 
 instance CanUpdate App where
-  updateLibrary = Turtle.reduce Fold.list beetUpdate
+  updateLibrary = do
+    isDryRun <- asks $ dryRun . config
+    if isDryRun then pure [] else Turtle.reduce Fold.list beetUpdate
 
 updateM :: (CanUpdate m, Logs m) => m ()
 updateM = do

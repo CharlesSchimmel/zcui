@@ -2,8 +2,7 @@ module Options
   ( doParseArgs
   , Arguments(..)
   , getConfig
-  )
-where
+  ) where
 
 import           Types
 
@@ -18,12 +17,25 @@ data Arguments = Arguments
   { argMusicDir          :: MusicDir
   , argArchiveOptions    :: ArchiveOptions
   , argConversionOptions :: ConversionOptions
+  , argDryRun            :: Bool
   }
 
 doParseArgs :: IO Arguments
 doParseArgs = options "Zip Convert Update Import" argParse
 
-argParse = Arguments <$> musicDirParse <*> archiveOpts <*> conversionsOpts
+argParse :: Parser Arguments
+argParse =
+  Arguments
+    <$> musicDirParse
+    <*> archiveOpts
+    <*> conversionsOpts
+    <*> dryRunParse
+
+dryRunParse :: Parser Bool
+dryRunParse = switch
+  "dry-run"
+  'd'
+  "Do not perform any destructive actions and fake out results"
 
 musicDirParse :: Parser MusicDir
 musicDirParse =
@@ -59,11 +71,12 @@ bitrateParse =
 defaultBitrate = Bitrate 128
 
 verifyOptions :: Arguments -> IO (Either Text Config)
-verifyOptions Arguments {..} = do
-  music   <- testMusicDir argMusicDir
-  archive <- testArchive argArchiveOptions
-  let convOpts = testConversionOptions argConversionOptions
-  pure $ Config <$> music <*> archive <*> convOpts
+verifyOptions Arguments { argMusicDir, argArchiveOptions, argDryRun, argConversionOptions }
+  = do
+    music   <- testMusicDir argMusicDir
+    archive <- testArchive argArchiveOptions
+    let convOpts = testConversionOptions argConversionOptions
+    pure $ (Config <$> music <*> archive <*> convOpts <*> pure argDryRun)
 
 testConversionOptions copts@(ConversionOptions (Bitrate bitrate)) =
   if bitrate > 32 && bitrate < 512
@@ -71,15 +84,14 @@ testConversionOptions copts@(ConversionOptions (Bitrate bitrate)) =
     else Left "Bitrate must be between 32-512"
 
 testMusicDir :: MusicDir -> IO (Either Text MusicDir)
-testMusicDir musicDir@(MusicDir path) =
-  (fmap $ const musicDir) <$> testdir' path
+testMusicDir musicDir@(MusicDir path) = fmap (const musicDir) <$> testdir' path
 
 testArchive :: ArchiveOptions -> IO (Either Text ArchiveOptions)
 testArchive NoArchive = pure . pure $ NoArchive
 testArchive opts@(MoveArchive (ArchiveDir archDir)) =
-  (fmap $ const opts) <$> testdir' archDir
+  fmap (const opts) <$> testdir' archDir
 testArchive opts@(ZipArchive (ArchiveDir archDir)) =
-  (fmap $ const opts) <$> testdir' archDir
+  fmap (const opts) <$> testdir' archDir
 
 testdir' :: FilePath -> IO (Either Text FilePath)
 testdir' path = do

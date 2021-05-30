@@ -1,12 +1,13 @@
 module Delete
   ( deleteSongsM
-  )
-where
+  ) where
 import           Types
 
-import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad
 import           Control.Monad.Except
+import           Control.Monad.Reader           ( MonadReader
+                                                , asks
+                                                )
 import           Data.Either
 import           Data.Functor
 import qualified Data.Text                     as T
@@ -20,11 +21,13 @@ class CanDelete m where
   delete :: Song -> m ()
 
 instance CanDelete App where
-  delete = deleteSong
+  delete song = do
+    isDryRun <- asks $ dryRun . config
+    if isDryRun then pure () else deleteSong song
 
 deleteSongsM :: (Logs m, CanDelete m) => [Song] -> m ()
 deleteSongsM songs = do
-  void $ mapM delete songs
+  mapM_ delete songs
 
 deleteSong :: (MonadIO m, Logs m) => Song -> m ()
 deleteSong (Song songPath) = do

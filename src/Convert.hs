@@ -1,18 +1,17 @@
 module Convert
   ( convertM
-  )
-where
+  ) where
 
 import           Types
 
-import           Control.Monad.Reader           ( asks )
 import           Control.Monad
 import           Control.Monad.Except
+import           Control.Monad.Reader           ( asks )
 import           Data.Either
 import           Data.Functor
+import           Data.Text                     as T
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
-import           Data.Text                     as T
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
@@ -27,9 +26,13 @@ class CanConvert m where
 
 instance CanConvert App where
   convertSong song = do
-    bitrateToUse <- asks $ bitrate . conversionOptions . config
-    result       <- single $ convertToOgg bitrateToUse song
-    either throwError pure result
+    isDryRun <- asks $ dryRun . config
+    if isDryRun
+      then pure ()
+      else do
+        bitrateToUse <- asks $ bitrate . conversionOptions . config
+        result       <- single $ convertToOgg bitrateToUse song
+        either throwError pure result
 
 convertM
   :: (CanConvert m, Logs m, MonadError Text m) => [Song] -> m [ConvertedSong]

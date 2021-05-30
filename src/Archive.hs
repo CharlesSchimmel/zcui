@@ -8,13 +8,13 @@ module Archive where
 import           Types
 import           Util
 
+import qualified Control.Foldl                 as Fold
 import           Control.Monad.Except
 import           Control.Monad.Reader
-import           Data.Maybe                     ( fromMaybe )
 import           Data.Either
 import           Data.Functor                   ( ($>) )
+import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Text                     as T
-import qualified Control.Foldl                 as Fold
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
@@ -30,8 +30,10 @@ class CanArchive m where
 instance CanArchive App where
   getArchiver album = do
     report . T.unwords $ ["Archiving", artistAlbum album]
-    opts <- asks $ archiveOptions . config
-    archiverFromOptions opts $ album
+    conf <- asks config
+    let isDryRun = dryRun conf
+        archiver = archiverFromOptions $ archiveOptions conf
+    if isDryRun then pure $ pure () else archiver album
   getArchiveStatus = asks (archiveStatus . archiveOptions . config)
 
 data ArchiveTarget = ArchiveTarget
@@ -44,7 +46,7 @@ data ArchiveFailure = ArchiveFailure Album Text
 archiveM
   :: (MonadError Text m, CanArchive m, Monad m, Logs m) => [Album] -> m [Album]
 archiveM albums = do
-  results <- sequence $ P.map (archiveOne getArchiver) albums
+  results <- P.mapM (archiveOne getArchiver) albums
   let (lefts, rights) = partitionEithers results
   tellArchiveFailures lefts
   pure rights
@@ -59,7 +61,7 @@ tellArchiveFailures fails = do
       . P.map T.pack
       $ [show $ P.length fails, "albums could not be archived"]
   let reasons    = P.map tellFailure fails
-      withIndent = P.map (\x -> T.append "\t" x) reasons
+      withIndent = P.map (T.append "\t") reasons
   report . T.unlines $ withIndent
 
 tellFailure :: ArchiveFailure -> Text
@@ -69,9 +71,9 @@ tellFailure (ArchiveFailure album reason) =
 archiveStatus :: ArchiveOptions -> Text
 archiveStatus NoArchive = "Skipping archiving"
 archiveStatus (MoveArchive (ArchiveDir path)) =
-  T.unwords ["Moving albums to", _toText $ path]
+  T.unwords ["Moving albums to", _toText path]
 archiveStatus (ZipArchive (ArchiveDir path)) =
-  T.unwords ["Zipping albums to", _toText $ path]
+  T.unwords ["Zipping albums to", _toText path]
 
 archiveOne
   :: (Monad m) => Archiver m -> Album -> m (Either ArchiveFailure Album)
@@ -125,7 +127,7 @@ rsync (ArchiveTarget source dest) = do
   result <- proc "rsync" [source, "-r", "--append-verify", dest] (pure mempty)
   case result of
     ExitSuccess   -> return $ Right ()
-    ExitFailure _ -> return $ syncFailureMsg
+    ExitFailure _ -> return syncFailureMsg
  where
   syncFailureMsg =
     Left $ T.unwords ["Failed to sync album from", source, " to ", dest]
