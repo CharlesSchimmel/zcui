@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8d2d2f84f984cdb4fb0b4ba93af0d4c9be5f4eb6d79d354cad0b7a6e3ac367cb
+-- hash: 509800d309f1b847631fce0409baa73a9473bcac051888706154756da825b1dc
 
 name:           zcui
 version:        0.1.0.0
@@ -39,7 +39,7 @@ library
       Paths_zcui
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   build-depends:
       base >=4.7 && <5
     , foldl
@@ -60,7 +60,7 @@ executable zcui
       Paths_zcui
   hs-source-dirs:
       app
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -83,7 +83,7 @@ test-suite zcui-test
       Paths_zcui
   hs-source-dirs:
       test
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts
+  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

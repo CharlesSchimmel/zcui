@@ -1,15 +1,11 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Types where
 
 import           Control.Monad.Except           ( ExceptT
                                                 , MonadError
                                                 )
-import           Control.Monad.Reader           ( ReaderT
-                                                , MonadReader
+import           Control.Monad.Reader           ( MonadReader
+                                                , ReaderT
                                                 , asks
                                                 )
 import           Data.Either                    ( fromRight )

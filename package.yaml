@@ -19,19 +19,19 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/githubuser/zcui#readme>
 
-default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts
+default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
 
 dependencies:
 - base >= 4.7 && < 5
-- turtle
+- foldl
+- hashable
+- hashmap
+- mtl
 - system-filepath
 - text
-- hashmap
-- hashable
-- unordered-containers
 - transformers
-- mtl
-- foldl
+- turtle
+- unordered-containers
 
 library:
   source-dirs: src
