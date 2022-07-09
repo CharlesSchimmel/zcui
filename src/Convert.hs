@@ -36,7 +36,7 @@ instance CanConvert App where
 convertM :: (CanConvert m, MonadError Text m) => [Song] -> m [ConvertedSong]
 convertM songs = do
     let convertedSongs = P.map mkConvertedSong songs
-    songsToConvert <- either throwError pure $ mapM massageSong songs
+    songsToConvert <- liftEither $ mapM massageSong songs
     mapM convertSong songsToConvert $> convertedSongs
   where
     mkConvertedSong s@(Song path) =

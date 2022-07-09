@@ -37,7 +37,6 @@ class Monad m => Logs m where
   report text = report_ $ T.unlines [text]
 
 instance Logs App where
-    report text = report_ $ T.unlines [text]
     report_ text = do
         logWith <- asks logFunc
         liftIO . logWith . T.unlines $ [text]

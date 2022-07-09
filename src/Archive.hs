@@ -27,7 +27,7 @@ import           Prelude                       as P
 import           Turtle
 
 newtype ArchiveApp a = ArchiveApp
-    { runArchiveApp :: ReaderT Env (ExceptT ArchiveFailure IO) a
+    { runArchiveApp :: ExceptT ArchiveFailure App a
     } deriving (Monad, Functor, Applicative, MonadReader Env, MonadIO, MonadError ArchiveFailure)
 
 instance Logs ArchiveApp where
@@ -46,14 +46,12 @@ class CanGetResponse m where
 
 instance CanGetResponse ArchiveApp where
     getResponse prompt = do
-        report prompt
+        report_ prompt
         rawResponse <- readline
         pure . lineToText . fromMaybe "" $ rawResponse
 
 runArchiveInApp :: ArchiveApp a -> App (Either ArchiveFailure a)
-runArchiveInApp archiveApp = do
-    env <- ask
-    liftIO $ runExceptT (runReaderT (runArchiveApp archiveApp) env)
+runArchiveInApp = runExceptT . runArchiveApp
 
 type Archiver m = Album -> m (Either ArchiveFailure ())
 
@@ -186,7 +184,7 @@ parseResponse
     :: (Logs m, CanGetResponse m) => Text -> m (Either ArchiveFailure ())
 parseResponse dest = do
     response <- getResponse
-        $ T.concat ["Files exist at: '", dest, "' Overwrite? [Y/n]"]
+        $ T.concat ["Files exist at: '", dest, "' Overwrite? [Y/n] "]
     case response of
         "y" -> pure $ Right ()
         "Y" -> pure $ Right ()
