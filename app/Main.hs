@@ -5,13 +5,13 @@ import           Options
 import           Types
 
 import           Control.Monad.Except
-import           Data.Functor                   ( ($>) )
 import           Control.Monad.Reader
-import           Data.Text.IO                  as T
+import           Data.Functor                   ( ($>) )
 import           Data.Text                     as T
                                          hiding ( find
                                                 , stripPrefix
                                                 )
+import           Data.Text.IO                  as T
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
@@ -31,4 +31,4 @@ mkEnv :: Config -> Env
 mkEnv conf = Env conf oldLogger
 
 oldLogger :: MonadIO io => Text -> io ()
-oldLogger = liftIO . T.putStrLn
+oldLogger = liftIO . T.putStr

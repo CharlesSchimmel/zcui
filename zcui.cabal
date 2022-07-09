@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 509800d309f1b847631fce0409baa73a9473bcac051888706154756da825b1dc
+-- hash: c860a1a572f6db95e630bc41cd019fd5dacc880a409a0e733f40cb27fc378d2b
 
 name:           zcui
 version:        0.1.0.0
@@ -39,7 +39,8 @@ library
       Paths_zcui
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
+  default-extensions:
+      OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   build-depends:
       base >=4.7 && <5
     , foldl
@@ -60,7 +61,8 @@ executable zcui
       Paths_zcui
   hs-source-dirs:
       app
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
+  default-extensions:
+      OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -83,7 +85,8 @@ test-suite zcui-test
       Paths_zcui
   hs-source-dirs:
       test
-  default-extensions: OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
+  default-extensions:
+      OverloadedStrings, RecordWildCards, NamedFieldPuns, FlexibleContexts, GeneralizedNewtypeDeriving
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

@@ -21,46 +21,49 @@ newtype App a = App
   } deriving (Monad, Functor, Applicative, MonadReader Env, MonadIO, MonadError Text)
 
 data Env = Env
-  { config  :: Config
-  , logFunc :: Text -> IO ()
-  }
+    { config  :: Config
+    , logFunc :: Text -> IO ()
+    }
 
 class Monad m => HasConfig_ m where
   getConfig_ :: m Config
 
 instance HasConfig_ App where
-  getConfig_ = asks config
+    getConfig_ = asks config
 
 class Monad m => Logs m where
+  report_ :: Text -> m ()
   report :: Text -> m ()
+  report text = report_ $ T.unlines [text]
 
 instance Logs App where
-  report text = do
-    logWith <- asks logFunc
-    liftIO . logWith $ text
+    report text = report_ $ T.unlines [text]
+    report_ text = do
+        logWith <- asks logFunc
+        liftIO . logWith . T.unlines $ [text]
 
 data Config = Config
-  { musicDir          :: MusicDir
-  , archiveOptions    :: ArchiveOptions
-  , conversionOptions :: ConversionOptions
-  , dryRun            :: Bool
-  }
+    { musicDir          :: MusicDir
+    , archiveOptions    :: ArchiveOptions
+    , conversionOptions :: ConversionOptions
+    , dryRun            :: Bool
+    }
 
 data Album = Album
-  { relativePath :: FilePath
-  , absolutePath :: FilePath
-  , albumName    :: Text
-  , artistName   :: Text
-  , songs        :: [Song]
-  }
-  deriving Show
+    { relativePath :: FilePath
+    , absolutePath :: FilePath
+    , albumName    :: Text
+    , artistName   :: Text
+    , songs        :: [Song]
+    }
+    deriving Show
 
 artistAlbum :: Album -> Text
 artistAlbum album = T.unwords [artistName album, "-", albumName album]
 
 instance Hashable FilePath where
-  hashWithSalt salt filePath = hashWithSalt salt pathTxt
-    where pathTxt = fromRight "" . toText $ filePath
+    hashWithSalt salt filePath = hashWithSalt salt pathTxt
+        where pathTxt = fromRight "" . toText $ filePath
 
 newtype Song = Song
   { songPath :: FilePath
@@ -80,15 +83,15 @@ data ArchiveOptions
   deriving (Show)
 
 data ConvertedSong = ConvertedSong
-  { originalSong  :: Song
-  , convertedSong :: Song
-  }
-  deriving Show
+    { originalSong  :: Song
+    , convertedSong :: Song
+    }
+    deriving Show
 
 newtype Bitrate = Bitrate Int
   deriving Show
 
 data ConversionOptions = ConversionOptions
-  { bitrate :: Bitrate
-  }
-  deriving Show
+    { bitrate :: Bitrate
+    }
+    deriving Show

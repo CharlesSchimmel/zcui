@@ -1,6 +1,8 @@
 module Lib where
 
-import           Archive
+import           Archive                        ( CanArchive(getArchiveStatus)
+                                                , archiveM
+                                                )
 import           Convert
 import           Data.Text                     as T
 import           Delete
