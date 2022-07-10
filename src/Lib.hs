@@ -1,7 +1,7 @@
 module Lib where
 
-import           Archive                        ( CanArchive(getArchiveStatus)
-                                                , archiveM
+import           Archive                        ( archiveM
+                                                , archiveStatus
                                                 )
 import           Convert
 import           Data.Text                     as T
@@ -11,6 +11,7 @@ import           Import
 import           Types
 
 import           Control.Monad.Except
+import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Functor
 import           Prelude                       as P
@@ -26,7 +27,7 @@ zcuiM = do
 
             void . runMaybeT $ do
                 archived <- asMaybeT_ albums $ \a -> do
-                    report =<< getArchiveStatus
+                    report . archiveStatus =<< asks (archiveOptions . config)
                     archiveM a
 
                 converted <- asMaybeT_ archived $ \a -> do

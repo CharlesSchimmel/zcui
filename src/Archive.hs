@@ -1,11 +1,11 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Archive
-    ( CanArchive(..)
+    ( archiveStatus
     , archiveM
     ) where
 
@@ -16,57 +16,47 @@ import qualified Control.Foldl                 as Fold
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Except     ( except )
+import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import           Data.Either
 import           Data.Functor                   ( ($>) )
+import qualified Data.List                     as L
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Text                     as T
 import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
-import           Prelude                       as P
-                                         hiding ( FilePath )
+import           Prelude                 hiding ( FilePath )
+import qualified Prelude                       as P
 import           Turtle
-
-newtype ArchiveApp a = ArchiveApp
-    { runArchiveApp :: ExceptT ArchiveFailure App a
-    } deriving (Monad, Functor, Applicative, MonadReader Env, MonadIO, MonadError ArchiveFailure)
-
-instance Logs ArchiveApp where
-    report_ text = do
-        logWith <- asks logFunc
-        liftIO . logWith $ text
 
 class CanTestPath m where
   pathExists :: FilePath -> m Bool
 
-instance CanTestPath ArchiveApp where
+instance CanTestPath App where
     pathExists = testpath
 
 class CanGetResponse m where
   getResponse :: Text -> m Text
 
-instance CanGetResponse ArchiveApp where
+instance CanGetResponse App where
     getResponse prompt = do
         report_ prompt
         rawResponse <- readline
         pure . lineToText . fromMaybe "" $ rawResponse
 
-runArchiveInApp :: ArchiveApp a -> App (Either ArchiveFailure a)
-runArchiveInApp = runExceptT . runArchiveApp
-
-type Archiver m = Album -> m (Either ArchiveFailure ())
+type Archiver m = ArchiveTarget -> m (Either Text ())
+type ArchiveTargetMkr m = Album -> m (Either Text ArchiveTarget)
 
 class MonadError Text m => CanArchive m where
-  getArchiver :: Album -> m (Either ArchiveFailure ())
-  getArchiveStatus :: m Text
+  mkTarget :: ArchiveTargetMkr m
+  doArchive :: Archiver m
 
 instance CanArchive App where
-    getArchiver album = do
-        report . T.unwords $ ["Archiving", artistAlbum album]
-        conf <- asks config
-        let isDryRun = dryRun conf
-            archiver = archiverFromOptions (archiveOptions conf)
-        if isDryRun then pure . pure $ () else archiver album
-    getArchiveStatus = asks (archiveStatus . archiveOptions . config)
+    mkTarget album = do
+        opts <- asks $ archiveOptions . config
+        getTargetMkr opts album
+    doArchive album = do
+        opts <- asks $ archiveOptions . config
+        archiverFromOptions opts album
 
 data ArchiveTarget = ArchiveTarget
     { source :: Text
@@ -76,18 +66,48 @@ data ArchiveTarget = ArchiveTarget
 data ArchiveFailure = Skipped | Error Text
 
 archiveM
-    :: (MonadError Text m, CanArchive m, Monad m, Logs m)
+    :: forall m
+     . ( MonadError Text m
+       , CanArchive m
+       , Monad m
+       , Logs m
+       , CanTestPath m
+       , CanGetResponse m
+       )
     => [Album]
     -> m [Album]
 archiveM albums = do
-    results <- P.mapM (\album -> (album, ) <$> getArchiver album) albums
-    let (fails, movedOrSkippedAlbums) =
-            partitionEithers $ P.map recoverSkips results
-    tellArchiveFailures fails
-    pure movedOrSkippedAlbums
+    targetResults   <- mapMToSnd mkTarget albums
+    targets         <- handleFailedTargets targetResults
+    overwriteChecks <- P.mapM
+        (\(alb, tgt) -> (, alb, tgt) <$> (checkOverwrite . dest $ tgt))
+        targets
+    let albumAndTargets = mapSkips <$> overwriteChecks
+    -- TODO: Does this halt on first error?
+    forM albumAndTargets $ \(album, tgt) -> do
+        aoeu <- maybe (pure $ Right ()) doArchive tgt
+        liftEither $ aoeu $> album
   where
-    recoverSkips (album, Left (Error msg)) = Left (album, msg)
-    recoverSkips (album, _               ) = Right album
+    mapSkips :: (Bool, Album, ArchiveTarget) -> (Album, Maybe ArchiveTarget)
+    mapSkips (True , alb, tgt) = (alb, Just tgt)
+    mapSkips (False, alb, tgt) = (alb, Nothing)
+
+handleFailedTargets
+    :: Logs m
+    => [(Album, Either Text ArchiveTarget)]
+    -> m [(Album, ArchiveTarget)]
+handleFailedTargets targets = do
+    let (fails, targets') = partitionEithers
+            $ fmap (\(alb, eith) -> bimap (alb, ) (alb, ) eith) targets
+    report_ $ failMsgs fails
+    pure targets'
+  where
+    failMsg (album, msg) =
+        T.unwords [T.pack . encodeString $ relativePath album, msg]
+    failMsgs fails =
+        T.unlines
+            $ "Could not construct destination for the following:"
+            : fmap failMsg fails
 
 tellArchiveFailures :: Logs m => [(Album, Text)] -> m ()
 tellArchiveFailures fails = do
@@ -113,23 +133,19 @@ archiveStatus (MoveArchive (ArchiveDir path)) =
 archiveStatus (ZipArchive (ArchiveDir path)) =
     T.unwords ["Zipping albums to", _toText path]
 
-archiverFromOptions
-    :: ArchiveOptions -> Album -> App (Either ArchiveFailure ())
-archiverFromOptions NoArchive = const . pure . pure $ ()
-archiverFromOptions (ZipArchive archiveDir) =
-    runArchiveInApp . archiveZip archiveDir
-archiverFromOptions (MoveArchive archiveDir) =
-    runArchiveInApp . archiveMove archiveDir
+getTargetMkr :: ArchiveOptions -> ArchiveTargetMkr App
+getTargetMkr NoArchive             _     = pure $ Left "Nothing to do"
+getTargetMkr (MoveArchive archDir) album = pure $ mkMoveTarget archDir album
+getTargetMkr (ZipArchive  archDir) album = pure $ mkZipTarget archDir album
 
-archiveZip :: ArchiveDir -> Album -> ArchiveApp ()
-archiveZip archive album = do
-    target@ArchiveTarget { dest } <- liftEither . mapLeft Error $ mkZipTarget
-        archive
-        album
-    liftEither =<< checkOverwrite dest
-    liftEither . biMap (Error . T.unwords) (const ()) =<< reduce
-        collectEithers
-        (zap target)
+archiverFromOptions :: ArchiveOptions -> Archiver App
+archiverFromOptions NoArchive                = const . pure . pure $ ()
+archiverFromOptions (ZipArchive  _         ) = archiveZip
+archiverFromOptions (MoveArchive archiveDir) = archiveMove
+
+archiveZip :: MonadIO m => Archiver m
+archiveZip target =
+    biMap T.unwords (const ()) <$> reduce collectEithers (zap target)
 
 mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
@@ -144,15 +160,10 @@ zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
     result <- inprocWithErr "7z" ["a", zipDest, folderToZip] (pure mempty)
     return $ either (Left . linesToText . pure) (const $ Right ()) result
 
-archiveMove :: ArchiveDir -> Album -> ArchiveApp ()
-archiveMove archive album = do
-    target@ArchiveTarget { dest } <- liftEither . mapLeft Error $ mkMoveTarget
-        archive
-        album
-    -- break if Skipped
-    liftEither =<< checkOverwrite dest
+archiveMove :: MonadIO m => Archiver m
+archiveMove target@ArchiveTarget { dest } = do
     mktree $ fromText dest
-    liftEither . mapLeft Error =<< (liftIO . single $ rsync target)
+    liftIO . single $ rsync target
 
 mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
 mkMoveTarget (ArchiveDir archDir) album@Album { absolutePath, relativePath } =
@@ -172,25 +183,21 @@ rsync (ArchiveTarget source dest) = do
         Left $ T.unwords
             ["Rsync failed to sync album from", source, " to ", dest]
 
-checkOverwrite
-    :: (Logs m, CanTestPath m, CanGetResponse m)
-    => Text
-    -> m (Either ArchiveFailure ())
+checkOverwrite :: (Logs m, CanTestPath m, CanGetResponse m) => Text -> m Bool
 checkOverwrite dest = do
     doesExist <- pathExists $ fromText dest
-    if not doesExist then pure . pure $ () else parseResponse dest
+    if not doesExist then pure True else parseResponse dest
 
-parseResponse
-    :: (Logs m, CanGetResponse m) => Text -> m (Either ArchiveFailure ())
+parseResponse :: (Logs m, CanGetResponse m) => Text -> m Bool
 parseResponse dest = do
     response <- getResponse
         $ T.concat ["Files exist at: '", dest, "' Overwrite? [Y/n] "]
     case response of
-        "y" -> pure $ Right ()
-        "Y" -> pure $ Right ()
-        ""  -> pure $ Right ()
-        "n" -> pure $ Left Skipped
-        "N" -> pure $ Left Skipped
+        "y" -> pure True
+        "Y" -> pure True
+        ""  -> pure True
+        "n" -> pure False
+        "N" -> pure False
         _   -> do
             report "Unrecognized response."
             parseResponse dest

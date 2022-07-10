@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Util where
 
 import           Control.Foldl                  ( Fold(..) )
@@ -9,6 +11,7 @@ import           Control.Monad.Except           ( MonadError(catchError)
 import           Data.Either                    ( fromRight )
 import           Data.Functor                   ( ($>) )
 import           Data.Text                     as T
+import           Prelude                       as P
 import           Turtle                         ( toText )
 
 _toText path = fromRight (T.pack $ show path) $ toText path
@@ -43,3 +46,8 @@ tryError action = (Right <$> action) `catchError` (pure . Left)
 
 ($$>) :: (Functor g, Functor f) => g (f a) -> b -> g (f b)
 ($$>) g_f b = fmap ($> b) g_f
+
+mapMToSnd :: (Monad m, Traversable t) => (a -> m b) -> t a -> m (t (a, b))
+mapMToSnd f = P.mapM (\a -> (a, ) <$> f a)
+
+
