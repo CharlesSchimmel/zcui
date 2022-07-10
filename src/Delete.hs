@@ -1,6 +1,7 @@
 module Delete
   ( deleteSongsM
   ) where
+import           Class
 import           Types
 
 import           Control.Monad

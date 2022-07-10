@@ -5,74 +5,48 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Archive
-    ( archiveStatus
+    ( explainArchiving
     , archiveM
     ) where
 
+import           Archive.Class
+import           Archive.Types
+import           Class
 import           Types
 import           Util
 
 import qualified Control.Foldl                 as Fold
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Except     ( except )
+import           Control.Monad
+import           Control.Monad.Except           ( MonadError(..)
+                                                , liftEither
+                                                )
+import           Control.Monad.Reader           ( asks )
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import           Data.Either
 import           Data.Functor                   ( ($>) )
 import qualified Data.List                     as L
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Text                     as T
-import           Filesystem.Path
-import           Filesystem.Path.CurrentOS
 import           Prelude                 hiding ( FilePath )
 import qualified Prelude                       as P
 import           Turtle
 
-class CanTestPath m where
-  pathExists :: FilePath -> m Bool
-
-instance CanTestPath App where
-    pathExists = testpath
-
-class CanGetResponse m where
-  getResponse :: Text -> m Text
-
-instance CanGetResponse App where
-    getResponse prompt = do
-        report_ prompt
-        rawResponse <- readline
-        pure . lineToText . fromMaybe "" $ rawResponse
-
-type Archiver m = ArchiveTarget -> m (Either Text ())
-type ArchiveTargetMkr m = Album -> m (Either Text ArchiveTarget)
-
-class MonadError Text m => CanArchive m where
-  mkTarget :: ArchiveTargetMkr m
-  doArchive :: Archiver m
-
-instance CanArchive App where
+instance Archives App where
     mkTarget album = do
         opts <- asks $ archiveOptions . config
         getTargetMkr opts album
-    doArchive album = do
+    archive album = do
         opts <- asks $ archiveOptions . config
         archiverFromOptions opts album
-
-data ArchiveTarget = ArchiveTarget
-    { source :: Text
-    , dest   :: Text
-    }
-
-data ArchiveFailure = Skipped | Error Text
 
 archiveM
     :: forall m
      . ( MonadError Text m
-       , CanArchive m
+       , Archives m
        , Monad m
        , Logs m
-       , CanTestPath m
-       , CanGetResponse m
+       , TestsPath m
+       , Prompts m
        )
     => [Album]
     -> m [Album]
@@ -85,7 +59,7 @@ archiveM albums = do
     let albumAndTargets = mapSkips <$> overwriteChecks
     -- TODO: Does this halt on first error?
     forM albumAndTargets $ \(album, tgt) -> do
-        aoeu <- maybe (pure $ Right ()) doArchive tgt
+        aoeu <- maybe (pure $ Right ()) archive tgt
         liftEither $ aoeu $> album
   where
     mapSkips :: (Bool, Album, ArchiveTarget) -> (Album, Maybe ArchiveTarget)
@@ -109,34 +83,32 @@ handleFailedTargets targets = do
             $ "Could not construct destination for the following:"
             : fmap failMsg fails
 
-tellArchiveFailures :: Logs m => [(Album, Text)] -> m ()
-tellArchiveFailures fails = do
-    if P.null fails
-        then pure ()
-        else
-            report
-            . T.unwords
-            . P.map T.pack
-            $ [show $ P.length fails, "albums could not be archived"]
-    let reasons    = P.map (uncurry tellFailure) fails
-        withIndent = P.map (T.append "\t") reasons
-    report . T.unlines $ withIndent
-
-tellFailure :: Album -> Text -> Text
-tellFailure album reason =
-    T.unwords [artistAlbum album, "failed with reason:", reason]
-
-archiveStatus :: ArchiveOptions -> Text
-archiveStatus NoArchive = "Skipping archiving"
-archiveStatus (MoveArchive (ArchiveDir path)) =
+explainArchiving :: ArchiveOptions -> Text
+explainArchiving NoArchive = "Skipping archiving"
+explainArchiving (MoveArchive (ArchiveDir path)) =
     T.unwords ["Moving albums to", _toText path]
-archiveStatus (ZipArchive (ArchiveDir path)) =
+explainArchiving (ZipArchive (ArchiveDir path)) =
     T.unwords ["Zipping albums to", _toText path]
 
 getTargetMkr :: ArchiveOptions -> ArchiveTargetMkr App
 getTargetMkr NoArchive             _     = pure $ Left "Nothing to do"
 getTargetMkr (MoveArchive archDir) album = pure $ mkMoveTarget archDir album
 getTargetMkr (ZipArchive  archDir) album = pure $ mkZipTarget archDir album
+
+mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
+mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
+    let zipName    = fromText $ T.concat [artistAlbum album, ".7z"]
+        outputFile = archDir </> zipName
+    source <- toText albumDir
+    dest   <- toText outputFile
+    pure $ ArchiveTarget source dest
+
+mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
+mkMoveTarget (ArchiveDir archDir) album@Album { absolutePath, relativePath } =
+    do
+        source <- toText absolutePath
+        dest   <- toText $ archDir </> relativePath
+        pure $ ArchiveTarget source dest
 
 archiverFromOptions :: ArchiveOptions -> Archiver App
 archiverFromOptions NoArchive                = const . pure . pure $ ()
@@ -146,14 +118,6 @@ archiverFromOptions (MoveArchive archiveDir) = archiveMove
 archiveZip :: MonadIO m => Archiver m
 archiveZip target =
     biMap T.unwords (const ()) <$> reduce collectEithers (zap target)
-
-mkZipTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
-mkZipTarget (ArchiveDir archDir) album@Album { absolutePath = albumDir } = do
-    let zipName    = fromText $ T.concat [artistAlbum album, ".7z"]
-        outputFile = archDir </> zipName
-    source <- toText albumDir
-    dest   <- toText outputFile
-    pure $ ArchiveTarget source dest
 
 zap :: ArchiveTarget -> Shell (Either Text ())
 zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
@@ -165,30 +129,23 @@ archiveMove target@ArchiveTarget { dest } = do
     mktree $ fromText dest
     liftIO . single $ rsync target
 
-mkMoveTarget :: ArchiveDir -> Album -> Either Text ArchiveTarget
-mkMoveTarget (ArchiveDir archDir) album@Album { absolutePath, relativePath } =
-    do
-        source <- toText absolutePath
-        dest   <- toText $ archDir </> relativePath
-        pure $ ArchiveTarget source dest
-
 rsync :: ArchiveTarget -> Shell (Either Text ())
 rsync (ArchiveTarget source dest) = do
     result <- proc "rsync" [source, "-r", "--append-verify", dest] (pure mempty)
     case result of
-        ExitSuccess   -> return $ Right ()
-        ExitFailure _ -> return syncFailureMsg
-  where
-    syncFailureMsg =
-        Left $ T.unwords
-            ["Rsync failed to sync album from", source, " to ", dest]
+        ExitSuccess -> return $ Right ()
+        ExitFailure _ ->
+            return
+                . Left
+                . T.unwords
+                $ ["Rsync failed to sync album from", source, " to ", dest]
 
-checkOverwrite :: (Logs m, CanTestPath m, CanGetResponse m) => Text -> m Bool
+checkOverwrite :: (Logs m, TestsPath m, Prompts m) => Text -> m Bool
 checkOverwrite dest = do
     doesExist <- pathExists $ fromText dest
     if not doesExist then pure True else parseResponse dest
 
-parseResponse :: (Logs m, CanGetResponse m) => Text -> m Bool
+parseResponse :: (Logs m, Prompts m) => Text -> m Bool
 parseResponse dest = do
     response <- getResponse
         $ T.concat ["Files exist at: '", dest, "' Overwrite? [Y/n] "]

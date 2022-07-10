@@ -21,10 +21,10 @@ data SongToConvert = SongToConvert
     , outputPath :: Text
     }
 
-class CanConvert m where
+class Converts m where
   convertSong :: SongToConvert -> m ()
 
-instance CanConvert App where
+instance Converts App where
     convertSong song = do
         isDryRun <- asks $ dryRun . config
         if isDryRun
@@ -33,17 +33,17 @@ instance CanConvert App where
                 bitrateToUse <- asks $ bitrate . conversionOptions . config
                 liftEither =<< single (convertToOgg bitrateToUse song)
 
-convertM :: (CanConvert m, MonadError Text m) => [Song] -> m [ConvertedSong]
+convertM :: (Converts m, MonadError Text m) => [Song] -> m [ConvertedSong]
 convertM songs = do
     let convertedSongs = P.map mkConvertedSong songs
-    songsToConvert <- liftEither $ mapM massageSong songs
+    songsToConvert <- liftEither $ mapM swapExtension songs
     mapM convertSong songsToConvert $> convertedSongs
   where
     mkConvertedSong s@(Song path) =
         ConvertedSong s . Song $ replaceExtension path ".ogg"
 
-massageSong :: Song -> Either Text SongToConvert
-massageSong (Song path) = SongToConvert <$> toText path <*> toText oggPath
+swapExtension :: Song -> Either Text SongToConvert
+swapExtension (Song path) = SongToConvert <$> toText path <*> toText oggPath
     where oggPath = replaceExtension path "ogg"
 
 convertToOgg :: Bitrate -> SongToConvert -> Shell (Either Text ())

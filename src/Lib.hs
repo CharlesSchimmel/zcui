@@ -1,8 +1,9 @@
 module Lib where
 
 import           Archive                        ( archiveM
-                                                , archiveStatus
+                                                , explainArchiving
                                                 )
+import           Class
 import           Convert
 import           Data.Text                     as T
 import           Delete
@@ -27,7 +28,7 @@ zcuiM = do
 
             void . runMaybeT $ do
                 archived <- asMaybeT_ albums $ \a -> do
-                    report . archiveStatus =<< asks (archiveOptions . config)
+                    report . explainArchiving =<< asks (archiveOptions . config)
                     archiveM a
 
                 converted <- asMaybeT_ archived $ \a -> do

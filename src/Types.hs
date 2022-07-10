@@ -25,22 +25,6 @@ data Env = Env
     , logFunc :: Text -> IO ()
     }
 
-class Monad m => HasConfig_ m where
-  getConfig_ :: m Config
-
-instance HasConfig_ App where
-    getConfig_ = asks config
-
-class Monad m => Logs m where
-  report_ :: Text -> m ()
-  report :: Text -> m ()
-  report text = report_ $ T.unlines [text]
-
-instance Logs App where
-    report_ text = do
-        logWith <- asks logFunc
-        liftIO . logWith . T.unlines $ [text]
-
 data Config = Config
     { musicDir          :: MusicDir
     , archiveOptions    :: ArchiveOptions
