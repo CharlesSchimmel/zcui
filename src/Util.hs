@@ -33,21 +33,8 @@ mapLeft fn = either (Left . fn) Right
 biMap :: (a -> b) -> (c -> d) -> Either a c -> Either b d
 biMap lFn rFn = either (Left . lFn) (Right . rFn)
 
-mapError
-    :: (MonadError e m, MonadError e' n)
-    => (m (Either e a) -> n (Either e' b))
-    -> m a
-    -> n b
-mapError f action = f (tryError action) >>= liftEither
-
--- | 'MonadError' analogue to the 'Control.Exception.try' function.
-tryError :: MonadError e m => m a -> m (Either e a)
-tryError action = (Right <$> action) `catchError` (pure . Left)
-
 ($$>) :: (Functor g, Functor f) => g (f a) -> b -> g (f b)
 ($$>) g_f b = fmap ($> b) g_f
 
 mapMToSnd :: (Monad m, Traversable t) => (a -> m b) -> t a -> m (t (a, b))
 mapMToSnd f = P.mapM (\a -> (a, ) <$> f a)
-
-

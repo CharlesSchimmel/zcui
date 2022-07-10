@@ -1,6 +1,6 @@
 module Delete
-  ( deleteSongsM
-  ) where
+    ( deleteSongsM
+    ) where
 import           Class
 import           Types
 
@@ -18,22 +18,18 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
-class CanDelete m where
+class Deletes m where
   delete :: Song -> m ()
 
-instance CanDelete App where
-  delete song = do
-    isDryRun <- asks $ dryRun . config
-    if isDryRun then pure () else deleteSong song
+instance Deletes App where
+    delete song = do
+        isDryRun <- asks $ dryRun . config
+        if isDryRun then pure () else deleteSong song
 
-deleteSongsM :: (Logs m, CanDelete m) => [Song] -> m ()
+deleteSongsM :: (Monad m, Logs m, Deletes m) => [Song] -> m ()
 deleteSongsM songs = do
-  mapM_ delete songs
+    mapM_ delete songs
 
 deleteSong :: (MonadIO m, Logs m) => Song -> m ()
 deleteSong (Song songPath) = do
-  report fileNameText
-  sh $ rm songPath
- where
-  fileNameText =
-    fromRight "(oops, could not toText song path)" (toText $ filename songPath)
+    sh $ rm songPath

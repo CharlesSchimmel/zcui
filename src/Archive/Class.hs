@@ -1,22 +1,42 @@
 
-module Archive.Class where
+module Archive.Class
+    ( Archives(..)
+    ) where
 
+import           Archive.Internal
 import           Archive.Types
 import           Class
 import           Types
+import           Util
 
+import           Control.Monad.Reader           ( asks )
+import           Data.Bifunctor                 ( bimap )
 import           Data.Maybe
+import qualified Data.Text                     as T
 import           Data.Text                      ( Text(..) )
 import           Prelude                 hiding ( FilePath )
 import           Turtle
-
-class Zips m where
-  zip :: ArchiveTarget -> m (Either Text ())
-
-class Moves m where
-  move :: ArchiveTarget -> m (Either Text ())
 
 class Archives m where
   mkTarget :: ArchiveTargetMkr m
   archive :: Archiver m
 
+instance Archives App where
+    mkTarget album = do
+        opts <- asks $ archiveOptions . config
+        getTargetMkr opts album
+    archive album = do
+        opts <- asks $ archiveOptions . config
+        getArchiver opts album
+
+getTargetMkr :: ArchiveOptions -> ArchiveTargetMkr App
+getTargetMkr NoArchive _ = pure $ Left "Nothing to do"
+getTargetMkr (MoveArchive archDir) album =
+    pure . toTextTarget album $ mkMoveTarget archDir album
+getTargetMkr (ZipArchive archDir) album =
+    pure . toTextTarget album $ mkZipDest archDir album
+
+getArchiver :: ArchiveOptions -> Archiver App
+getArchiver NoArchive                = const . pure . pure $ ()
+getArchiver (ZipArchive  _         ) = doZip
+getArchiver (MoveArchive archiveDir) = doMove

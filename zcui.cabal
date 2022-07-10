@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: edf6a56fcb69a903090a11d52e72d5c8a6acec44314f977b1f4a6dab44c4cfbc
+-- hash: 192a508ed9c37ab9be0c7fdef050b126c45e706cf4942e28f58d606241ee5ba6
 
 name:           zcui
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Archive
       Archive.Class
+      Archive.Internal
       Archive.Types
       Class
       Convert

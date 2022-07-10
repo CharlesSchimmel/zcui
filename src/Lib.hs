@@ -24,7 +24,7 @@ zcuiM = do
     if P.null albums
         then report "No albums found."
         else do
-            report . T.unlines $ "Found albums:" : P.map artistAlbum albums
+            report_ . T.unlines $ "Found albums:" : P.map artistAlbum albums
 
             void . runMaybeT $ do
                 archived <- asMaybeT_ albums $ \a -> do

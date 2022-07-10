@@ -1,9 +1,13 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+
 module Convert
     ( convertM
     ) where
 
 import           Types
 
+import           Class                          ( Logs(..) )
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Reader           ( asks )
@@ -16,38 +20,47 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
-data SongToConvert = SongToConvert
+data Conversion = Conversion
     { inputPath  :: Text
     , outputPath :: Text
     }
 
 class Converts m where
-  convertSong :: SongToConvert -> m ()
+  convertSong :: Conversion -> m (Either Text ())
 
 instance Converts App where
     convertSong song = do
         isDryRun <- asks $ dryRun . config
         if isDryRun
-            then pure ()
+            then pure $ Right ()
             else do
                 bitrateToUse <- asks $ bitrate . conversionOptions . config
-                liftEither =<< single (convertToOgg bitrateToUse song)
+                single (convertToOgg bitrateToUse song)
 
-convertM :: (Converts m, MonadError Text m) => [Song] -> m [ConvertedSong]
+convertM
+    :: forall m
+     . (Logs m, Converts m, MonadError Text m)
+    => [Song]
+    -> m [ConvertedSong]
 convertM songs = do
-    let convertedSongs = P.map mkConvertedSong songs
-    songsToConvert <- liftEither $ mapM swapExtension songs
-    mapM convertSong songsToConvert $> convertedSongs
+    songsToConvert <- liftEither $ mapM mkConversion songs
+    mapM_ convertSong' songsToConvert
+    pure $ P.map mkConvertedSong songs
   where
+    convertSong' :: (Song, Conversion) -> m ()
+    convertSong' (song, conversion) = do
+        report_ . T.concat $ [songFileName song, "..."]
+        liftEither =<< convertSong conversion
     mkConvertedSong s@(Song path) =
         ConvertedSong s . Song $ replaceExtension path ".ogg"
 
-swapExtension :: Song -> Either Text SongToConvert
-swapExtension (Song path) = SongToConvert <$> toText path <*> toText oggPath
+mkConversion :: Song -> Either Text (Song, Conversion)
+mkConversion song@(Song path) =
+    (song, ) <$> (Conversion <$> toText path <*> toText oggPath)
     where oggPath = replaceExtension path "ogg"
 
-convertToOgg :: Bitrate -> SongToConvert -> Shell (Either Text ())
-convertToOgg bitrate (SongToConvert origPath oggPath) = do
+convertToOgg :: Bitrate -> Conversion -> Shell (Either Text ())
+convertToOgg bitrate (Conversion origPath oggPath) = do
     result <- proc
         "ffmpeg"
         [ "-loglevel"

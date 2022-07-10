@@ -47,7 +47,7 @@ importM albums = do
 beetImport :: [Text] -> Shell Line
 beetImport paths = inproc "beet" ("import" : paths) (pure mempty)
 
-updateM :: (Updates m, Logs m) => m ()
+updateM :: (Monad m, Updates m, Logs m) => m ()
 updateM = do
     result <- updateLibrary
     mapM_ report result

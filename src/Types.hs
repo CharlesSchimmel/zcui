@@ -52,6 +52,10 @@ newtype Song = Song
   { songPath :: FilePath
   } deriving (Show)
 
+songFileName :: Song -> Text
+songFileName Song { songPath } =
+    fromRight "(oops, could not toText song path)" (toText $ filename songPath)
+
 newtype MusicDir = MusicDir
   { unMusicDir :: FilePath
   } deriving (Show)
