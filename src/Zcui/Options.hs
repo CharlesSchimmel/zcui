@@ -32,8 +32,10 @@ argParse =
         <*> dryRunParse
 
 dryRunParse :: Parser Bool
-dryRunParse =
-    switch "Do not perform any destructive actions and fake out results"
+dryRunParse = switch
+    "dry-run"
+    'd'
+    "Do not perform any destructive actions and fake out results"
 
 musicDirParse :: Parser MusicDir
 musicDirParse =

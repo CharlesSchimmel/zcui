@@ -57,8 +57,8 @@ archiveM albums = do
         pure album
   where
     archive' album target = do
-        report_ $ T.concat ["Archiving ", artistAlbum album, "..."]
-        archive target <* report_ "Done"
+        report_ $ T.concat [artistAlbum album, "..."]
+        archive target <* report "Done"
     skip album = do
         report . T.unwords $ ["Skipping", artistAlbum album]
         pure $ Right ()

@@ -41,7 +41,7 @@ checkOverwrite dest = do
 parseResponse :: (Monad m, Logs m, Prompts m) => Text -> m Bool
 parseResponse dest = do
     response <- getResponse
-        $ T.concat ["Files exist at: '", dest, "' Overwrite? [Y/n] "]
+        $ T.concat ["Files exist at '", dest, "' Overwrite? [Y/n] "]
     case response of
         "y" -> pure True
         "Y" -> pure True
