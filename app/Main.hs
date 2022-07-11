@@ -1,8 +1,8 @@
 module Main where
 
-import           Lib
-import           Options
-import           Types
+import           Zcui
+import           Zcui.Options
+import           Zcui.Types
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
@@ -24,7 +24,7 @@ main = do
 
 runProgram :: Env -> IO ()
 runProgram env = do
-    runResult <- runExceptT (runReaderT (runApp zcuiM) env)
+    runResult <- runExceptT (runReaderT (runApp zcui) env)
     either T.putStrLn pure runResult
 
 mkEnv :: Config -> Env

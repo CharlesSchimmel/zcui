@@ -1,9 +1,9 @@
 
-module Archive.Types where
+module Zcui.Archive.Types where
 
 import           Data.Text                     as T
-import           Types
-import           Util
+import           Zcui.Types
+import           Zcui.Util
 
 type Archiver m = ArchiveTarget -> m (Either Text ())
 type ArchiveTargetMkr m = Album -> m (Either Text ArchiveTarget)

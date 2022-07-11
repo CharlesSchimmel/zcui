@@ -4,16 +4,16 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Archive
+module Zcui.Archive
     ( explainArchiving
     , archiveM
     ) where
 
-import           Archive.Class
-import           Archive.Types
-import           Class
-import           Types
-import           Util
+import           Zcui.Archive.Class
+import           Zcui.Archive.Types
+import           Zcui.Class
+import           Zcui.Types
+import           Zcui.Util
 
 import           Control.Monad                  ( forM )
 import           Control.Monad.Except           ( MonadError(..)

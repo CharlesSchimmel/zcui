@@ -1,5 +1,5 @@
 
-module Types where
+module Zcui.Types where
 
 import           Control.Monad.Except           ( ExceptT
                                                 , MonadError

@@ -1,10 +1,10 @@
-module Import
+module Zcui.Import
     ( importM
     , updateM
     ) where
 
-import           Class
-import           Types
+import           Zcui.Class
+import           Zcui.Types
 
 import qualified Control.Foldl                 as Fold
 import           Control.Monad

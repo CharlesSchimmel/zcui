@@ -1,13 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
-module Convert
+module Zcui.Convert
     ( convertM
     ) where
 
-import           Types
+import           Zcui.Types
 
-import           Class                          ( Logs(..) )
+import           Zcui.Class                     ( Logs(..) )
+
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Reader           ( asks )

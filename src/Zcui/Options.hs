@@ -1,10 +1,10 @@
-module Options
+module Zcui.Options
     ( doParseArgs
     , Arguments(..)
     , getConfig
     ) where
 
-import           Types
+import           Zcui.Types
 
 import           Data.Text                     as T
 import           Prelude                 hiding ( FilePath )
@@ -32,10 +32,8 @@ argParse =
         <*> dryRunParse
 
 dryRunParse :: Parser Bool
-dryRunParse = switch
-    "dry-run"
-    'd'
-    "Do not perform any destructive actions and fake out results"
+dryRunParse =
+    switch "Do not perform any destructive actions and fake out results"
 
 musicDirParse :: Parser MusicDir
 musicDirParse =

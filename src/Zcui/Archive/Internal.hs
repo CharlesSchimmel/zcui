@@ -1,9 +1,9 @@
-module Archive.Internal where
+module Zcui.Archive.Internal where
 
-import           Archive.Types
-import           Class
-import           Types
-import           Util
+import           Zcui.Archive.Types
+import           Zcui.Class
+import           Zcui.Types
+import           Zcui.Util
 
 import           Control.Monad.Reader           ( asks )
 import           Data.Bifunctor                 ( bimap )

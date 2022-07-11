@@ -1,11 +1,12 @@
-module Class where
+module Zcui.Class where
+
+import           Zcui.Types
 
 import           Control.Monad.Reader           ( asks )
 import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                     as T
 import           Prelude                 hiding ( FilePath )
 import           Turtle
-import           Types
 
 class Prompts m where
   getResponse :: Text -> m Text

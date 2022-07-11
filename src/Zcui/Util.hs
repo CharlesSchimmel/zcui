@@ -1,6 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 
-module Util where
+module Zcui.Util where
 
 import           Control.Foldl                  ( Fold(..) )
 import           Control.Monad                  ( liftM2 )
@@ -8,6 +8,7 @@ import           Control.Monad.Except           ( MonadError(catchError)
                                                 , liftEither
                                                 , throwError
                                                 )
+import           Control.Monad.Trans.Maybe
 import           Data.Either                    ( fromRight )
 import           Data.Functor                   ( ($>) )
 import           Data.Text                     as T
@@ -38,3 +39,10 @@ biMap lFn rFn = either (Left . lFn) (Right . rFn)
 
 mapMToSnd :: (Monad m, Traversable t) => (a -> m b) -> t a -> m (t (a, b))
 mapMToSnd f = P.mapM (\a -> (a, ) <$> f a)
+
+asMaybeT_ :: Monad m => [a] -> ([a] -> m b) -> MaybeT m b
+asMaybeT_ = flip asMaybeT
+
+asMaybeT :: Monad m => ([a] -> m b) -> [a] -> MaybeT m b
+asMaybeT fn as =
+    if P.null as then MaybeT $ pure Nothing else MaybeT (Just <$> fn as)

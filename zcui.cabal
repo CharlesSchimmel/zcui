@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 192a508ed9c37ab9be0c7fdef050b126c45e706cf4942e28f58d606241ee5ba6
+-- hash: 76c2a67f83b352ae497bf9b02877ca4f2b0835a822d682568437c24cd11fac00
 
 name:           zcui
 version:        0.1.0.0
@@ -27,18 +27,19 @@ source-repository head
 
 library
   exposed-modules:
-      Archive
-      Archive.Class
-      Archive.Internal
-      Archive.Types
-      Class
-      Convert
-      Delete
-      Find
-      Import
-      Lib
-      Types
-      Util
+      Zcui
+      Zcui.Archive
+      Zcui.Archive.Class
+      Zcui.Archive.Internal
+      Zcui.Archive.Types
+      Zcui.Class
+      Zcui.Convert
+      Zcui.Delete
+      Zcui.Find
+      Zcui.Import
+      Zcui.Options
+      Zcui.Types
+      Zcui.Util
   other-modules:
       Paths_zcui
   hs-source-dirs:
@@ -61,7 +62,6 @@ library
 executable zcui
   main-is: Main.hs
   other-modules:
-      Options
       Paths_zcui
   hs-source-dirs:
       app

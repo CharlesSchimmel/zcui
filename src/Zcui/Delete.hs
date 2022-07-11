@@ -1,8 +1,8 @@
-module Delete
+module Zcui.Delete
     ( deleteSongsM
     ) where
-import           Class
-import           Types
+import           Zcui.Class
+import           Zcui.Types
 
 import           Control.Monad
 import           Control.Monad.Except
