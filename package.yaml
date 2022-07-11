@@ -1,10 +1,9 @@
 name:                zcui
 version:             0.1.0.0
-github:              "githubuser/zcui"
+github:              "CharlesSchimmel/zcui"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2020 Author name here"
+author:              "Charles Schimmelpfennig"
+copyright:           "Charles Schimmelpfennig"
 
 extra-source-files:
 - README.md
@@ -26,6 +25,7 @@ dependencies:
 - foldl
 - hashable
 - hashmap
+- hspec
 - mtl
 - system-filepath
 - text
