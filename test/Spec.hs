@@ -1,2 +1,7 @@
+import           Test.Hspec
+
+import           Zcui.Test.Archive
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = hspec $ archiveTests
+

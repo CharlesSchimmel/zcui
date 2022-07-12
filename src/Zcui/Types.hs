@@ -39,7 +39,7 @@ data Album = Album
     , artistName   :: Text
     , songs        :: [Song]
     }
-    deriving Show
+    deriving (Show, Eq)
 
 artistAlbum :: Album -> Text
 artistAlbum album = T.unwords [artistName album, "-", albumName album]
@@ -50,7 +50,7 @@ instance Hashable FilePath where
 
 newtype Song = Song
   { songPath :: FilePath
-  } deriving (Show)
+  } deriving (Show, Eq)
 
 songFileName :: Song -> Text
 songFileName Song { songPath } =
