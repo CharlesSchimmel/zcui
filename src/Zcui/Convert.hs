@@ -1,5 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 
 module Zcui.Convert
     ( convertM
@@ -9,6 +8,8 @@ module Zcui.Convert
     ) where
 
 import           Zcui.Class                     ( Logs(..) )
+import           Zcui.Convert.Class
+import           Zcui.Convert.Types
 import           Zcui.Types
 
 import           Control.Monad
@@ -20,29 +21,6 @@ import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
-
-data ConvertTarget = ConvertTarget
-    { inputPath  :: Text
-    , outputPath :: Text
-    }
-
-data ConvertedSong = ConvertedSong
-    { originalSong  :: Song
-    , convertedSong :: Song
-    }
-    deriving (Show, Eq, Ord)
-
-class Converts m where
-  convertSong :: ConvertTarget -> m (Either Text ())
-
-instance Converts App where
-    convertSong song = do
-        isDryRun <- asks $ dryRun . config
-        if isDryRun
-            then pure $ Right ()
-            else do
-                bitrateToUse <- asks $ bitrate . conversionOptions . config
-                single (convertToOgg bitrateToUse song)
 
 convertM
     :: forall m
@@ -57,6 +35,15 @@ convertM songs = do
         report_ . T.concat $ [songFileName song, "..."]
         liftEither =<< convertSong conversion
         return . ConvertedSong song . Song . fromText $ outputPath conversion
+
+instance Converts App where
+    convertSong song = do
+        isDryRun <- asks $ dryRun . config
+        if isDryRun
+            then pure $ Right ()
+            else do
+                bitrateToUse <- asks $ bitrate . conversionOptions . config
+                single (convertToOgg bitrateToUse song)
 
 mkTarget :: Song -> Either Text ConvertTarget
 mkTarget song@(Song path) = ConvertTarget <$> toText path <*> toText oggPath

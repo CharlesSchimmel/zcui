@@ -1,6 +1,8 @@
 module Zcui.Import
     ( importM
     , updateM
+    , Imports(..)
+    , Updates(..)
     ) where
 
 import           Zcui.Class

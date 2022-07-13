@@ -14,10 +14,10 @@ import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle
 
-class CanFindAlbums m where
+class Finds m where
   findAlbums :: m [Album]
 
-instance CanFindAlbums App where
+instance Finds App where
     findAlbums = do
         musicDir <- asks $ musicDir . config
         albumMap <- reduce albumMapFold $ findFlacs $ unMusicDir musicDir

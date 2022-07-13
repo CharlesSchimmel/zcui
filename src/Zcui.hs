@@ -9,14 +9,31 @@ import           Zcui.Import
 import           Zcui.Types
 import           Zcui.Util
 
-import           Control.Monad.Reader           ( asks )
+import           Control.Monad.Except           ( MonadError(..) )
+import           Control.Monad.Reader           ( MonadReader
+                                                , asks
+                                                )
 import           Control.Monad.Trans.Maybe      ( runMaybeT )
 import           Data.Functor
 import           Data.Text                     as T
 import           Prelude                       as P
                                          hiding ( FilePath )
 
-zcui :: App ()
+zcui
+    :: ( Monad m
+       , Finds m
+       , Archives m
+       , Converts m
+       , Deletes m
+       , Updates m
+       , Imports m
+       , MonadReader Env m
+       , MonadError Text m
+       , Logs m
+       , Prompts m
+       , TestsPath m
+       )
+    => m ()
 zcui = do
     albums <- findAlbums
     if P.null albums
@@ -24,20 +41,20 @@ zcui = do
         else do
             report_ . T.unlines $ "Found albums:" : P.map artistAlbum albums
 
-            void . runMaybeT $ do
-                archived <- asMaybeT_ albums $ \album -> do
+            whileAnyItemsLeft $ do
+                archived <- itemsLeft albums $ \album -> do
                     report . explainArchiving =<< asks (archiveOptions . config)
                     archiveM album
 
-                converted <- asMaybeT_ archived $ \album -> do
+                converted <- itemsLeft archived $ \album -> do
                     report "Converting"
                     convertM . (>>= songs) $ album
 
-                _ <- asMaybeT_ converted $ deleteSongsM . P.map originalSong
+                _ <- itemsLeft converted $ deleteSongsM . P.map originalSong
 
-                _ <- asMaybeT_ archived $ const updateM
+                _ <- itemsLeft archived $ const updateM
 
-                _ <- asMaybeT_ archived importM
+                _ <- itemsLeft archived importM
 
                 return ()
     report "All done :)"

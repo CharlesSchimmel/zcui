@@ -1,5 +1,6 @@
 module Zcui.Delete
     ( deleteSongsM
+    , Deletes(..)
     ) where
 import           Zcui.Class
 import           Zcui.Types

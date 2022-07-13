@@ -7,6 +7,7 @@
 module Zcui.Archive
     ( explainArchiving
     , archiveM
+    , Archives(..)
     ) where
 
 import           Zcui.Archive.Class
@@ -38,13 +39,7 @@ explainArchiving (ZipArchive (ArchiveDir path)) =
 
 archiveM
     :: forall m
-     . ( Archives m
-       , Logs m
-       , Monad m
-       , MonadError Text m
-       , Prompts m
-       , TestsPath m
-       )
+     . (Monad m, Archives m, Logs m, MonadError Text m)
     => [Album]
     -> m [Album]
 archiveM albums = do

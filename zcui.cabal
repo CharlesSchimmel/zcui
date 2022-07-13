@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2c4643c076719c274b8877c1082d8ca115315416e7a162c1174f715489f295ec
+-- hash: db29b050e46cda96f6213b5c644e90b6e7a30026897551cd3655967f6458447d
 
 name:           zcui
 version:        0.1.0.0
@@ -34,6 +34,8 @@ library
       Zcui.Archive.Types
       Zcui.Class
       Zcui.Convert
+      Zcui.Convert.Class
+      Zcui.Convert.Types
       Zcui.Delete
       Zcui.Find
       Zcui.Import

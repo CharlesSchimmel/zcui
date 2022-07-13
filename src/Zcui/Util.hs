@@ -3,7 +3,9 @@
 module Zcui.Util where
 
 import           Control.Foldl                  ( Fold(..) )
-import           Control.Monad                  ( liftM2 )
+import           Control.Monad                  ( liftM2
+                                                , void
+                                                )
 import           Control.Monad.Except           ( MonadError(catchError)
                                                 , liftEither
                                                 , throwError
@@ -46,3 +48,9 @@ asMaybeT_ = flip asMaybeT
 asMaybeT :: Monad m => ([a] -> m b) -> [a] -> MaybeT m b
 asMaybeT fn as =
     if P.null as then MaybeT $ pure Nothing else MaybeT (Just <$> fn as)
+
+whileAnyItemsLeft :: Monad m => MaybeT m a -> m ()
+whileAnyItemsLeft = void . runMaybeT
+
+itemsLeft :: Monad m => [a] -> ([a] -> m b) -> MaybeT m b
+itemsLeft = asMaybeT_
