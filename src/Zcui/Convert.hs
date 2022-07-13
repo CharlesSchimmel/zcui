@@ -3,31 +3,37 @@
 
 module Zcui.Convert
     ( convertM
+    , Converts(..)
+    , ConvertTarget(..)
+    , ConvertedSong(..)
     ) where
 
-import           Zcui.Types
-
 import           Zcui.Class                     ( Logs(..) )
+import           Zcui.Types
 
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Reader           ( asks )
 import           Data.Either
-import           Data.Functor
 import           Data.Text                     as T
-import           Filesystem.Path
 import           Filesystem.Path.CurrentOS
 import           Prelude                       as P
                                          hiding ( FilePath )
 import           Turtle                  hiding ( (<&>) )
 
-data Conversion = Conversion
+data ConvertTarget = ConvertTarget
     { inputPath  :: Text
     , outputPath :: Text
     }
 
+data ConvertedSong = ConvertedSong
+    { originalSong  :: Song
+    , convertedSong :: Song
+    }
+    deriving (Show, Eq, Ord)
+
 class Converts m where
-  convertSong :: Conversion -> m (Either Text ())
+  convertSong :: ConvertTarget -> m (Either Text ())
 
 instance Converts App where
     convertSong song = do
@@ -44,24 +50,20 @@ convertM
     => [Song]
     -> m [ConvertedSong]
 convertM songs = do
-    songsToConvert <- liftEither $ mapM mkConversion songs
-    mapM_ convertSong' songsToConvert
-    pure $ P.map mkConvertedSong songs
-  where
-    convertSong' :: (Song, Conversion) -> m ()
-    convertSong' (song, conversion) = do
+    songsToConvert <- forM songs $ \song -> do
+        target <- liftEither $ mkTarget song
+        return (song, target)
+    forM songsToConvert $ \(song, conversion) -> do
         report_ . T.concat $ [songFileName song, "..."]
         liftEither =<< convertSong conversion
-    mkConvertedSong s@(Song path) =
-        ConvertedSong s . Song $ replaceExtension path ".ogg"
+        return . ConvertedSong song . Song . fromText $ outputPath conversion
 
-mkConversion :: Song -> Either Text (Song, Conversion)
-mkConversion song@(Song path) =
-    (song, ) <$> (Conversion <$> toText path <*> toText oggPath)
+mkTarget :: Song -> Either Text ConvertTarget
+mkTarget song@(Song path) = ConvertTarget <$> toText path <*> toText oggPath
     where oggPath = replaceExtension path "ogg"
 
-convertToOgg :: Bitrate -> Conversion -> Shell (Either Text ())
-convertToOgg bitrate (Conversion origPath oggPath) = do
+convertToOgg :: Bitrate -> ConvertTarget -> Shell (Either Text ())
+convertToOgg bitrate (ConvertTarget origPath oggPath) = do
     result <- proc
         "ffmpeg"
         [ "-loglevel"

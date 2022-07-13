@@ -50,7 +50,7 @@ instance Hashable FilePath where
 
 newtype Song = Song
   { songPath :: FilePath
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Ord)
 
 songFileName :: Song -> Text
 songFileName Song { songPath } =
@@ -68,12 +68,6 @@ data ArchiveOptions
   | MoveArchive ArchiveDir
   | NoArchive
   deriving (Show)
-
-data ConvertedSong = ConvertedSong
-    { originalSong  :: Song
-    , convertedSong :: Song
-    }
-    deriving Show
 
 newtype Bitrate = Bitrate Int
   deriving Show

@@ -1,11 +1,12 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Zcui.Test.Archive where
 
 import           Test.Hspec
 
+import           Zcui.Test.Class
 import           Zcui.Test.Data                 ( albums )
 
 import           Zcui.Archive                   ( archiveM )
@@ -29,68 +30,75 @@ import qualified Data.Text.IO                  as T
 import           Prelude                       as P
                                          hiding ( FilePath )
 
-data MockEnv = MockEnv
+data ArchiveEnv = ArchiveEnv
     { overwriteResponse :: Text
     , pathExistResult   :: Bool
     , archiveResult     :: Either Text ()
     , targetResult      :: Either Text ArchiveTarget
     }
 
-newtype MockM a = MockM
-    { runEnv :: ReaderT MockEnv (ExceptT Text Identity) a
-    } deriving (Monad, Functor, Applicative, MonadError Text, MonadReader MockEnv)
+type ArchiveMock = MockM ArchiveEnv
 
-instance Archives MockM where
+instance Archives ArchiveMock where
     mkTarget _ = do
         asks targetResult
     archive target = do
         asks archiveResult
 
-instance Logs MockM where
-    report_ msg = pure ()
-
-instance Prompts MockM where
+instance Prompts ArchiveMock where
     getResponse promptMsg = do
-        response <- asks overwriteResponse
-        report $ T.unlines [promptMsg, response]
-        pure response
+        asks overwriteResponse
 
-instance TestsPath MockM where
+instance TestsPath ArchiveMock where
     pathExists _ = asks pathExistResult
 
-runMock env = runIdentity . runExceptT . flip runReaderT env . runEnv
 runArchiveMock env = runMock env $ archiveM albums
 
 defTarget = ArchiveTarget "source" "dest"
-happyEnv = MockEnv "y" False (Right ()) (Right defTarget)
+happyEnv = ArchiveEnv "y" False (Right ()) (Right defTarget)
 
 archiveTests :: Spec
 archiveTests = describe "Archive" $ do
     happyPath
     fileConflicts
     archiveFail
+    targetFail
 
 happyPath =
     describe "When there are no file conflicts and archiving succeeds" $ do
-        let result = runMock happyEnv $ archiveM albums
+        let result = runArchiveMock happyEnv
         it "then all albums returned" $ result `shouldBe` Right albums
 
 fileConflicts = describe "When destination files exist" $ do
     let env = happyEnv { pathExistResult = True }
 
     describe "and the user does not overwrite" $ do
-        let env'   = env { overwriteResponse = "n" }
-        let result = runMock env' $ archiveM albums
-        it "then all albums returned" $ result `shouldBe` Right albums
+        let env' = env { overwriteResponse = "n" }
+        it "then all albums returned" $ do
+            let result = runArchiveMock env'
+            result `shouldBe` Right albums
 
     describe "and the user does overwrite" $ do
-        let env'   = env { overwriteResponse = "y" }
-        let result = runMock env' $ archiveM albums
-        it "then all albums returned" $ result `shouldBe` Right albums
+        let env' = env { overwriteResponse = "y" }
+        it "then all albums returned" $ do
+            let result = runArchiveMock env'
+            result `shouldBe` Right albums
 
 archiveFail = describe "When archive operation fails" $ do
     it "then exit immediately" $ do
-        isLeft (runArchiveMock happyEnv { archiveResult = Left "Oh no" })
-            `shouldBe` True
+        let result = runArchiveMock happyEnv { archiveResult = Left "Oh no" }
+        isLeft result
+
+targetFail = describe "When making a target fails" $ do
+    let failedTargetEnv = happyEnv { targetResult = Left "Oh no" }
+
+    it "then keep going" $ do
+        let result = runArchiveMock failedTargetEnv
+        isRight result
+
+    it "then don't continue with failed albums" $ do
+        let oneAlbum = P.take 1 albums
+        let result = P.length <$> runMock failedTargetEnv (archiveM oneAlbum)
+        result `shouldBe` Right 0
 
 

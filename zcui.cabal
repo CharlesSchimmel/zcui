@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0e45e7f585ca2deabb045b084745143e3e75c2e68be785645745b6557e087f91
+-- hash: 2c4643c076719c274b8877c1082d8ca115315416e7a162c1174f715489f295ec
 
 name:           zcui
 version:        0.1.0.0
@@ -89,6 +89,8 @@ test-suite zcui-test
   main-is: Spec.hs
   other-modules:
       Zcui.Test.Archive
+      Zcui.Test.Class
+      Zcui.Test.Convert
       Zcui.Test.Data
       Paths_zcui
   hs-source-dirs:
