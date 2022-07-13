@@ -49,7 +49,7 @@ archiveM
     -> m [Album]
 archiveM albums = do
     targetResults   <- mapMToSnd mkTarget albums
-    targets         <- reportFailedTargets targetResults
+    targets         <- reportAndIgnoreFailedTargets targetResults
     overwriteChecks <- P.mapM (uncurry checkOverwrite') targets
     -- TODO: Does this halt on first error?
     forM overwriteChecks $ \(album, target) -> do
@@ -67,21 +67,21 @@ archiveM albums = do
         res <- checkOverwrite dest
         pure $ if res then (album, Just target) else (album, Nothing)
 
-reportFailedTargets
+reportAndIgnoreFailedTargets
     :: (Monad m, Logs m)
     => [(Album, Either Text ArchiveTarget)]
     -> m [(Album, ArchiveTarget)]
-reportFailedTargets targets = do
-    let (fails, targets') = partitionEithers
+reportAndIgnoreFailedTargets targets = do
+    let (fails, okTargets) = partitionEithers
             $ fmap (\(alb, eith) -> bimap (alb, ) (alb, ) eith) targets
     reportFails fails
-    pure targets'
+    pure okTargets
   where
     reportFails fails =
         if P.null fails then pure () else report_ $ failMsgs fails
-    failMsg (album, msg) =
-        T.unwords [T.pack . encodeString $ relativePath album, msg]
     failMsgs fails =
         T.unlines
             $ "Could not construct destination for the following:"
             : fmap failMsg fails
+    failMsg (album, msg) =
+        T.unwords [T.pack . encodeString $ relativePath album, msg]

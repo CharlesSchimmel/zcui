@@ -93,3 +93,4 @@ archiveFail = describe "When archive operation fails" $ do
         isLeft (runArchiveMock happyEnv { archiveResult = Left "Oh no" })
             `shouldBe` True
 
+
