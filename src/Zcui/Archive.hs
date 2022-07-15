@@ -13,6 +13,7 @@ module Zcui.Archive
 import           Zcui.Archive.Class
 import           Zcui.Archive.Types
 import           Zcui.Class
+import           Zcui.Files
 import           Zcui.Types
 import           Zcui.Util
 
@@ -39,7 +40,13 @@ explainArchiving (ZipArchive (ArchiveDir path)) =
 
 archiveM
     :: forall m
-     . (Monad m, Archives m, Logs m, MonadError Text m)
+     . ( Monad m
+       , Prompts m
+       , TestsPath m
+       , Archives m
+       , Logs m
+       , MonadError Text m
+       )
     => [Album]
     -> m [Album]
 archiveM albums = do
@@ -57,15 +64,16 @@ archiveM albums = do
     skip album = do
         report . T.unwords $ ["Skipping", artistAlbum album]
         pure $ Right ()
-    checkOverwrite' :: Album -> ArchiveTarget -> m (Album, Maybe ArchiveTarget)
-    checkOverwrite' album target@ArchiveTarget { dest } = do
+    checkOverwrite'
+        :: Album -> FileProjection -> m (Album, Maybe FileProjection)
+    checkOverwrite' album target@FileProjection { dest } = do
         res <- checkOverwrite dest
         pure $ if res then (album, Just target) else (album, Nothing)
 
 reportAndIgnoreFailedTargets
     :: (Monad m, Logs m)
-    => [(Album, Either Text ArchiveTarget)]
-    -> m [(Album, ArchiveTarget)]
+    => [(Album, Either Text FileProjection)]
+    -> m [(Album, FileProjection)]
 reportAndIgnoreFailedTargets targets = do
     let (fails, okTargets) = partitionEithers
             $ fmap (\(alb, eith) -> bimap (alb, ) (alb, ) eith) targets

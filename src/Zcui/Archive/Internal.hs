@@ -2,6 +2,7 @@ module Zcui.Archive.Internal where
 
 import           Zcui.Archive.Types
 import           Zcui.Class
+import           Zcui.Files                     ( FileProjection(..) )
 import           Zcui.Types
 import           Zcui.Util
 
@@ -13,11 +14,11 @@ import           Data.Text                      ( Text(..) )
 import           Prelude                 hiding ( FilePath )
 import           Turtle
 
-toTextTarget :: Album -> FilePath -> Either Text ArchiveTarget
+toTextTarget :: Album -> FilePath -> Either Text FileProjection
 toTextTarget Album { absolutePath } dest = do
     sourceText <- toText absolutePath
     destText   <- toText dest
-    Right $ ArchiveTarget sourceText destText
+    Right $ FileProjection sourceText destText
 
 mkZipDest :: ArchiveDir -> Album -> FilePath
 mkZipDest (ArchiveDir archDir) album@Album { absolutePath } =
@@ -32,18 +33,18 @@ doZip :: MonadIO m => Archiver m
 doZip target =
     biMap T.unwords (const ()) <$> reduce collectEithers (zap target)
 
-zap :: ArchiveTarget -> Shell (Either Text ())
-zap ArchiveTarget { source = folderToZip, dest = zipDest } = do
-    result <- inprocWithErr "7z" ["a", zipDest, folderToZip] (pure mempty)
+zap :: FileProjection -> Shell (Either Text ())
+zap FileProjection { source, dest } = do
+    result <- inprocWithErr "7z" ["a", dest, source] (pure mempty)
     return $ either (Left . linesToText . pure) (const $ Right ()) result
 
 doMove :: MonadIO m => Archiver m
-doMove target@ArchiveTarget { dest } = do
+doMove target@FileProjection { dest } = do
     mktree $ fromText dest
     liftIO . single $ rsync target
 
-rsync :: ArchiveTarget -> Shell (Either Text ())
-rsync (ArchiveTarget source dest) = do
+rsync :: FileProjection -> Shell (Either Text ())
+rsync FileProjection { source, dest } = do
     result <- proc "rsync" [source, "-r", "--append-verify", dest] (pure mempty)
     case result of
         ExitSuccess -> return $ Right ()
@@ -51,5 +52,4 @@ rsync (ArchiveTarget source dest) = do
             return
                 . Left
                 . T.unwords
-                $ ["Rsync failed to sync from", source, " to ", dest]
-
+                $ ["Rsync failed to sync from", source, "to", dest]

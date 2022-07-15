@@ -3,13 +3,14 @@
 module Zcui.Convert
     ( convertM
     , Converts(..)
-    , ConvertTarget(..)
+    , FileProjection(..)
     , ConvertedSong(..)
     ) where
 
 import           Zcui.Class                     ( Logs(..) )
 import           Zcui.Convert.Class
 import           Zcui.Convert.Types
+import           Zcui.Files
 import           Zcui.Types
 
 import           Control.Monad
@@ -34,7 +35,7 @@ convertM songs = do
     forM songsToConvert $ \(song, conversion) -> do
         report_ . T.concat $ [songFileName song, "..."]
         liftEither =<< convertSong conversion
-        return . ConvertedSong song . Song . fromText $ outputPath conversion
+        return . ConvertedSong song . Song . fromText $ dest conversion
 
 instance Converts App where
     convertSong song = do
@@ -45,12 +46,12 @@ instance Converts App where
                 bitrateToUse <- asks $ bitrate . conversionOptions . config
                 single (convertToOgg bitrateToUse song)
 
-mkTarget :: Song -> Either Text ConvertTarget
-mkTarget song@(Song path) = ConvertTarget <$> toText path <*> toText oggPath
+mkTarget :: Song -> Either Text FileProjection
+mkTarget song@(Song path) = FileProjection <$> toText path <*> toText oggPath
     where oggPath = replaceExtension path "ogg"
 
-convertToOgg :: Bitrate -> ConvertTarget -> Shell (Either Text ())
-convertToOgg bitrate (ConvertTarget origPath oggPath) = do
+convertToOgg :: Bitrate -> FileProjection -> Shell (Either Text ())
+convertToOgg bitrate FileProjection { source, dest } = do
     result <- proc
         "ffmpeg"
         [ "-loglevel"
@@ -58,7 +59,7 @@ convertToOgg bitrate (ConvertTarget origPath oggPath) = do
         , "-hide_banner"
         , "-y"
         , "-i"
-        , origPath
+        , source
         , "-acodec"
         , "libopus"
         , "-b:a"
@@ -68,7 +69,7 @@ convertToOgg bitrate (ConvertTarget origPath oggPath) = do
         , "-vn"
         , "-compression_level"
         , "10"
-        , oggPath
+        , dest
         ]
         (pure mempty)
     case result of

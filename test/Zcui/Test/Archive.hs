@@ -11,7 +11,7 @@ import           Zcui.Test.Data                 ( albums )
 
 import           Zcui.Archive                   ( archiveM )
 import           Zcui.Archive.Class             ( Archives(..) )
-import           Zcui.Archive.Types             ( ArchiveTarget(ArchiveTarget) )
+import           Zcui.Archive.Types             ( FileProjection(..) )
 import           Zcui.Class                     ( Logs(..)
                                                 , Prompts(..)
                                                 , TestsPath(..)
@@ -34,7 +34,7 @@ data ArchiveEnv = ArchiveEnv
     { overwriteResponse :: Text
     , pathExistResult   :: Bool
     , archiveResult     :: Either Text ()
-    , targetResult      :: Either Text ArchiveTarget
+    , targetResult      :: Either Text FileProjection
     }
 
 type ArchiveMock = MockM ArchiveEnv
@@ -54,7 +54,7 @@ instance TestsPath ArchiveMock where
 
 runArchiveMock env = runMock env $ archiveM albums
 
-defTarget = ArchiveTarget "source" "dest"
+defTarget = FileProjection "source" "dest"
 happyEnv = ArchiveEnv "y" False (Right ()) (Right defTarget)
 
 archiveTests :: Spec
